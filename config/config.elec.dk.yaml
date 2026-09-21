@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+#tutorial: true
+
+
+run:
+  name: "elec_dk_se_1y_c3_24H" # use this to keep track of runs with different settings
+  disable_progressbar: true
+
+scenario:
+  clusters:
+  - 3
+  planning_horizons:
+  - 2025 # setting horizon to 2025
+
+#countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
+countries: ['DK', 'SE']
+
+electricity:
+  extendable_carriers:
+    Generator:  []
+    StorageUnit: []
+    Store: []
+    Link: []
+
+  #conventional_carriers: [oil, OCGT, CCGT,] # adding coal and nuclear
+  #custom_powerplants: true
+  estimate_renewable_capacities:
+    enable: true
+    from_powerplantmatching: true
+    from_irenastat: false
+    year: 2025
+  estimate_battery_capacities: true
+  transmission_limit: v1.0 #cannot expand transmission capacity
+
+atlite:
+  cutouts:
+    europe-2013-sarah3-era5:
+      module: era5
+      x: [-12., 32.0]
+      y: [47.0, 72.0] 
+      time: ["2013-01-01", "2013-12-31"]
+
+costs:
+  emission_prices:
+    enable: false
+    co2: 100.0 #Husk . ellers virker den ikke
+    
+clustering:
+  temporal:
+    resolution_elec: 24h

@@ -1,0 +1,158 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+#tutorial: true
+
+
+run:
+  name: "sector_dk_se_ENS_updated" # use this to keep track of runs with different settings
+  disable_progressbar: true
+
+
+
+scenario:
+  clusters:
+  - 3
+  planning_horizons:
+  - 2025 # setting horizon to 2025
+  sector_opts:
+  - ""  
+
+#countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
+countries: ['DK', 'SE']
+
+electricity:
+  extendable_carriers:
+    Generator: []
+    StorageUnit: []
+    Store: []
+    Link: [] #add conv to this list
+    
+
+  #conventional_carriers: [oil, OCGT, CCGT,] # adding coal and nuclear
+  #custom_powerplants: true
+  estimate_renewable_capacities:
+    enable: true
+    from_powerplantmatching: true
+    from_irenastat: true
+    year: 2025
+  estimate_battery_capacities: true
+  transmission_limit: v1.0 #cannot expand transmission capacity
+
+atlite:
+  cutouts:
+    europe-2013-sarah3-era5:
+      module: era5
+      x: [-12., 32.0]
+      y: [47.0, 72.0] 
+      time: ["2013-01-01", "2013-12-31"]
+
+costs:
+  emission_prices: #Undersøg også "dynamic" funktionen
+    enable: false
+    co2: 100.0 #Husk . ellers virker den ikke
+
+clustering:
+  temporal:
+    resolution_sector: 24h  
+
+foresight: overnight   # top-level key, not under scenario — sector-coupled runs need this set
+#foresight: myopic
+pypsa_eur: #What to keep when converting from PyPSA-Eur to PyPSA-Eur-Sec
+  Bus:
+  - AC
+  Link:
+  - DC
+  Generator: #renewable generators that should be kept, but does not neeed to be converted to links
+  - onwind
+  - "offwind-ac"
+  - "offwind-dc"
+  - "offwind-float"
+  - "solar-hsat"
+  - solar
+  - ror
+  - nuclear
+  #- OCGT
+  #- CCGT
+  #- coal
+  #- lignite
+  #- oil
+  #- biomass
+  #- waste
+  StorageUnit:
+  - PHS
+  - hydro
+  Store: []
+
+sector:
+  district_heating:
+    potential:
+      DK: 0.9    #https://dbdh.org/all-about-district-energy/district-heating-in-denmark/
+      default: 0.1 #Lavet om HUSK AT LAV DET OM
+    progress:
+        2025: 1.0
+  heat_pump_sources: #This section is the default, but is considered conservative.
+    urban central:
+    - air
+    urban decentral:
+    - air
+    rural:
+    - air
+    - ground
+  #For residential heat, we can enable dsm = true when doing 2035.
+  #Keep eye on bev_dsm_availability
+  v2g: false #turn on by 2035? https://ens.dk/media/8525/download 
+  #There is no option to make special land_transport_electric_share specific for Denmark
+  #retrogen for 2035 might be a good idea to set true
+  overdimension_heat_generators:
+    decentral: 1.0
+    central: 1.0
+  chp:
+    enable: true
+    fuel:
+    - gas #virker tilsyneladende kun for gas og ikke waste eller biomass
+    micro_chp: false
+  dac: false
+  hydrogen_fuel_cell: false
+  hydrogen_turbine: false
+  SMR: false
+  SMR_cc: false
+  regional_oil_demand: true
+  regional_coal_demand: false
+
+
+  hydrogen_underground_storage: false  
+  methanol:
+    methanol_to_power:
+      ccgt: false
+      ccgt_cc: false
+      ocgt: false
+      allam: false
+    biomass_to_methanol: false
+
+  ammonia: false
+
+  H2_network: false
+
+  biomass_transport: true
+
+  conventional_generation:
+    OCGT: gas
+    CCGT: gas
+    coal: coal
+    lignite: lignite
+    oil: oil
+    nuclear: uranium
+    biomass: biomass          # was "solid biomass" — that's not a spatial attribute
+    
+
+  electrobiofuels: false
+  municipal_solid_waste: true
+  solid_biomass_import:
+    enable: true
+    price: 54
+    max_amount: 1390
+    upstream_emissions_factor: 0.1
+
+# docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
