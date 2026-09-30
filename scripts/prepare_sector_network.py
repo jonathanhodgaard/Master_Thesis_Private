@@ -1482,8 +1482,11 @@ def add_generation(
             # "Series p_nom has an index which does not align with the
             # passed names". Values, in the same order as `nodes`, avoid
             # that check entirely.
-            p_nom=(p_nom_existing / costs.at[generator, "efficiency"]).values, #for fuel-side capacitiy. p_nom_existing is electricity so after conversion.
-            p_nom_min=(p_nom_existing / costs.at[generator, "efficiency"]).values, #same
+            # p_nom_existing is electrical (bus1) capacity; convert to
+            # fuel-side (bus0) capacity via efficiency, since p_nom on this
+            # Link is denominated in bus0 units
+            p_nom=(p_nom_existing / costs.at[generator, "efficiency"]).values,
+            p_nom_min=(p_nom_existing / costs.at[generator, "efficiency"]).values,
             carrier=generator,
             efficiency=costs.at[generator, "efficiency"],
             efficiency2=costs.at[carrier, "CO2 intensity"],
@@ -2858,6 +2861,162 @@ def build_heat_demand(
     return heat_demand
 
 
+def apply_existing_chp_and_heat_capacities(
+    n: pypsa.Network,
+    existing_chp_heat_file: str,
+    keep_extendable: bool = True,
+) -> None:
+    """
+    Overlay existing urban central CHP and heat-only capacities onto the
+    Links already built for this planning horizon.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        Network to modify. Must already contain the urban central CHP and
+        boiler Links (built earlier in `add_heat`).
+    existing_chp_heat_file : str
+        Path to CSV with columns node, carrier, set, power_capacity,
+        heating_capacity. `set` is one of "CHP", "boiler", "heat pump",
+        "resistive heater", or "solar thermal". power_capacity and
+        heating_capacity are electrical/thermal output in MW; a row's
+        `node` must match an existing AC bus name.
+        For "heat pump" rows, `carrier` is interpreted as the heat source
+        (e.g. "air", "ground") rather than a fuel. For "resistive heater"
+        and "solar thermal" rows, `carrier` is informational only (there
+        is one Link/Generator per heat system, not per carrier) and only
+        `heating_capacity` is used, since these are sized directly in
+        heat-output units, not fuel-input units. "solar thermal" targets
+        a Generator, not a Link.
+    keep_extendable : bool
+        If True, matched links keep p_nom_extendable=True with p_nom_min
+        set to the existing capacity, so the solver can build beyond it.
+        If False, capacity is fixed at the existing value.
+    """
+    capacities = pd.read_csv(existing_chp_heat_file)
+
+    # carriers whose CHP/boiler Links don't follow the generic
+    # "{node} urban central {carrier} CHP/boiler" naming pattern
+    chp_name_overrides = {"waste": "{node} waste CHP"}
+    # the biomass boiler Link (like its decentral counterparts) is named
+    # "biomass boiler", not "solid biomass boiler"
+    boiler_name_overrides = {"solid biomass": "{node} urban central biomass boiler"}
+
+    for row in capacities.itertuples():
+        if row.set == "CHP":
+            name_template = chp_name_overrides.get(
+                row.carrier, "{node} urban central {carrier} CHP"
+            )
+            name = name_template.format(node=row.node, carrier=row.carrier)
+            if name not in n.links.index:
+                logger.warning(
+                    f"No CHP link '{name}' to attach existing capacity from "
+                    f"{existing_chp_heat_file} to (check node/carrier spelling, "
+                    "or this carrier may need its own Link definition). Skipping."
+                )
+                continue
+
+            efficiency_el = n.links.at[name, "efficiency"]
+            p_nom = row.power_capacity / efficiency_el
+
+            n.links.at[name, "p_nom"] = p_nom
+            n.links.at[name, "p_nom_min"] = p_nom
+            n.links.at[name, "p_nom_extendable"] = keep_extendable
+
+            if row.heating_capacity > 0:
+                # preserve this plant's actual heat/power ratio rather than
+                # the generic cost-assumption backpressure ratio
+                n.links.at[name, "efficiency2"] = (
+                    row.heating_capacity / row.power_capacity * efficiency_el
+                )
+
+        elif row.set == "boiler":
+            name_template = boiler_name_overrides.get(
+                row.carrier, "{node} urban central {carrier} boiler"
+            )
+            name = name_template.format(node=row.node, carrier=row.carrier)
+            if name not in n.links.index:
+                logger.warning(
+                    f"No boiler link '{name}' to attach existing capacity from "
+                    f"{existing_chp_heat_file} to (this carrier likely has no "
+                    "boiler Link built yet - it needs its own Link definition). "
+                    "Skipping."
+                )
+                continue
+
+            efficiency = n.links.at[name, "efficiency"]
+            p_nom = row.heating_capacity / efficiency
+
+            n.links.at[name, "p_nom"] = p_nom
+            n.links.at[name, "p_nom_min"] = p_nom
+            n.links.at[name, "p_nom_extendable"] = keep_extendable
+
+        elif row.set == "heat pump":
+            # carrier means heat source here (e.g. "air", "ground"); the
+            # Link is sized directly in heat-output units (see docstring),
+            # so no division by efficiency/COP is needed.
+            name = f"{row.node} urban central {row.carrier} heat pump"
+            if name not in n.links.index:
+                logger.warning(
+                    f"No heat pump link '{name}' to attach existing capacity "
+                    f"from {existing_chp_heat_file} to (check node/heat source "
+                    "spelling, or this heat source may need enabling in "
+                    "heat_pump_sources). Skipping."
+                )
+                continue
+
+            p_nom = row.heating_capacity
+
+            n.links.at[name, "p_nom"] = p_nom
+            n.links.at[name, "p_nom_min"] = p_nom
+            n.links.at[name, "p_nom_extendable"] = keep_extendable
+
+        elif row.set == "resistive heater":
+            # one resistive heater per heat system, not per carrier; bus0
+            # is electricity, so p_nom is in electrical-input units, same
+            # as the boiler case above (not heat-output units)
+            name = f"{row.node} urban central resistive heater"
+            if name not in n.links.index:
+                logger.warning(
+                    f"No resistive heater link '{name}' to attach existing "
+                    f"capacity from {existing_chp_heat_file} to (check "
+                    "resistive_heaters is enabled). Skipping."
+                )
+                continue
+
+            efficiency = n.links.at[name, "efficiency"]
+            p_nom = row.heating_capacity / efficiency
+
+            n.links.at[name, "p_nom"] = p_nom
+            n.links.at[name, "p_nom_min"] = p_nom
+            n.links.at[name, "p_nom_extendable"] = keep_extendable
+
+        elif row.set == "solar thermal":
+            # this is a Generator, not a Link - sized directly in heat
+            # output units, like the heat pump/resistive heater cases
+            name = f"{row.node} urban central solar thermal collector"
+            if name not in n.generators.index:
+                logger.warning(
+                    f"No solar thermal generator '{name}' to attach existing "
+                    f"capacity from {existing_chp_heat_file} to (check "
+                    "solar_thermal is enabled). Skipping."
+                )
+                continue
+
+            p_nom = row.heating_capacity
+
+            n.generators.at[name, "p_nom"] = p_nom
+            n.generators.at[name, "p_nom_min"] = p_nom
+            n.generators.at[name, "p_nom_extendable"] = keep_extendable
+
+        else:
+            raise ValueError(
+                f"Unknown 'set' value '{row.set}' in {existing_chp_heat_file}; "
+                "expected 'CHP', 'boiler', 'heat pump', 'resistive heater', "
+                "or 'solar thermal'."
+            )
+
+
 def add_heat(
     n: pypsa.Network,
     costs: pd.DataFrame,
@@ -3587,44 +3746,58 @@ def add_heat(
                 if fuel == "solid biomass":
                     # Solid biomass CHP is added in add_biomass
                     continue
-                fuel_nodes = getattr(spatial, fuel).df
+                fuel_spatial = getattr(spatial, fuel)
+                # fuels resolved per node (e.g. gas) expose a .df lookup
+                # table; fuels that are always a single EU-wide bus (e.g.
+                # oil, coal) don't - their .nodes (length 1) broadcasts
+                fuel_bus0 = (
+                    fuel_spatial.df.loc[nodes, "nodes"].values
+                    if hasattr(fuel_spatial, "df")
+                    else fuel_spatial.nodes
+                )
+                # use a fuel-specific backpressure CHP technology when the
+                # cost database has one (e.g. "central coal CHP"); otherwise
+                # fall back to gas CHP assumptions, matching prior behaviour
+                chp_key = f"central {fuel} CHP"
+                if chp_key not in costs.index:
+                    chp_key = "central gas CHP"
                 n.add(
                     "Link",
                     nodes + f" urban central {fuel} CHP",
-                    bus0=fuel_nodes.loc[nodes, "nodes"].values,
+                    bus0=fuel_bus0,
                     bus1=nodes,
                     bus2=nodes + " urban central heat",
                     bus3="co2 atmosphere",
                     carrier=f"urban central {fuel} CHP",
                     p_nom_extendable=True,
-                    capital_cost=costs.at["central gas CHP", "capital_cost"]
-                    * costs.at["central gas CHP", "efficiency"],
-                    marginal_cost=costs.at["central gas CHP", "VOM"]
-                    * costs.at["central gas CHP", "efficiency"],  # NB: VOM is per MWel
-                    efficiency=costs.at["central gas CHP", "efficiency"],
-                    efficiency2=costs.at["central gas CHP", "efficiency"]
-                    / costs.at["central gas CHP", "c_b"],
+                    capital_cost=costs.at[chp_key, "capital_cost"]
+                    * costs.at[chp_key, "efficiency"],
+                    marginal_cost=costs.at[chp_key, "VOM"]
+                    * costs.at[chp_key, "efficiency"],  # NB: VOM is per MWel
+                    efficiency=costs.at[chp_key, "efficiency"],
+                    efficiency2=costs.at[chp_key, "efficiency"]
+                    / costs.at[chp_key, "c_b"],
                     efficiency3=costs.at[fuel, "CO2 intensity"],
-                    lifetime=costs.at["central gas CHP", "lifetime"],
+                    lifetime=costs.at[chp_key, "lifetime"],
                 )
 
                 n.add(
                     "Link",
                     nodes + f" urban central {fuel} CHP CC",
-                    bus0=fuel_nodes.loc[nodes, "nodes"].values,
+                    bus0=fuel_bus0,
                     bus1=nodes,
                     bus2=nodes + " urban central heat",
                     bus3="co2 atmosphere",
                     bus4=spatial.co2.df.loc[nodes, "nodes"].values,
                     carrier=f"urban central {fuel} CHP CC",
                     p_nom_extendable=True,
-                    capital_cost=costs.at["central gas CHP", "capital_cost"]
-                    * costs.at["central gas CHP", "efficiency"]
+                    capital_cost=costs.at[chp_key, "capital_cost"]
+                    * costs.at[chp_key, "efficiency"]
                     + costs.at["biomass CHP capture", "capital_cost"]
                     * costs.at[fuel, "CO2 intensity"],
-                    marginal_cost=costs.at["central gas CHP", "VOM"]
-                    * costs.at["central gas CHP", "efficiency"],  # NB: VOM is per MWel
-                    efficiency=costs.at["central gas CHP", "efficiency"]
+                    marginal_cost=costs.at[chp_key, "VOM"]
+                    * costs.at[chp_key, "efficiency"],  # NB: VOM is per MWel
+                    efficiency=costs.at[chp_key, "efficiency"]
                     - costs.at[fuel, "CO2 intensity"]
                     * (
                         costs.at["biomass CHP capture", "electricity-input"]
@@ -3632,8 +3805,8 @@ def add_heat(
                             "biomass CHP capture", "compression-electricity-input"
                         ]
                     ),
-                    efficiency2=costs.at["central gas CHP", "efficiency"]
-                    / costs.at["central gas CHP", "c_b"]
+                    efficiency2=costs.at[chp_key, "efficiency"]
+                    / costs.at[chp_key, "c_b"]
                     + costs.at[fuel, "CO2 intensity"]
                     * (
                         costs.at["biomass CHP capture", "heat-output"]
@@ -3644,7 +3817,7 @@ def add_heat(
                     * (1 - costs.at["biomass CHP capture", "capture_rate"]),
                     efficiency4=costs.at[fuel, "CO2 intensity"]
                     * costs.at["biomass CHP capture", "capture_rate"],
-                    lifetime=costs.at["central gas CHP", "lifetime"],
+                    lifetime=costs.at[chp_key, "lifetime"],
                 )
 
         if (
@@ -4423,6 +4596,29 @@ def add_biomass(
                 lifetime=costs.at["biomass boiler", "lifetime"],
             )
 
+        # urban central biomass boiler (not covered by the decentral loop
+        # above); restrict to nodes that actually have a district heat bus
+        urban_central_heat_nodes = pd.Index(
+            n.buses.location[n.buses.carrier == "urban central heat"]
+        )
+        if len(urban_central_heat_nodes) > 0:
+            n.add(
+                "Link",
+                urban_central_heat_nodes + " urban central biomass boiler",
+                p_nom_extendable=True,
+                bus0=spatial.biomass.df.loc[
+                    urban_central_heat_nodes, "nodes"
+                ].values,
+                bus1=urban_central_heat_nodes + " urban central heat",
+                carrier="urban central biomass boiler",
+                efficiency=costs.at["biomass boiler", "efficiency"],
+                capital_cost=costs.at["biomass boiler", "efficiency"]
+                * costs.at["biomass boiler", "capital_cost"]
+                * options["overdimension_heat_generators"]["central"],
+                marginal_cost=costs.at["biomass boiler", "pelletizing cost"],
+                lifetime=costs.at["biomass boiler", "lifetime"],
+            )
+
     # Solid biomass to liquid fuel
     if options["biomass_to_liquid"]:
         add_carrier_buses(
@@ -4909,6 +5105,29 @@ def add_industry(
                     lifetime=costs.at["decentral oil boiler", "lifetime"],
                 )
 
+        # urban central oil boiler (not built above, which only covers
+        # decentral heat systems); restrict to nodes that actually have a
+        # district heat bus, same as the other urban central technologies
+        urban_central_heat_nodes = pd.Index(
+            n.buses.location[n.buses.carrier == "urban central heat"]
+        )
+        if len(urban_central_heat_nodes) > 0:
+            n.add(
+                "Link",
+                urban_central_heat_nodes + " urban central oil boiler",
+                p_nom_extendable=True,
+                bus0=spatial.oil.nodes,  # always a single EU-wide bus
+                bus1=urban_central_heat_nodes + " urban central heat",
+                bus2="co2 atmosphere",
+                carrier="urban central oil boiler",
+                efficiency=costs.at["decentral oil boiler", "efficiency"],
+                efficiency2=costs.at["oil", "CO2 intensity"],
+                capital_cost=costs.at["decentral oil boiler", "efficiency"]
+                * costs.at["decentral oil boiler", "capital_cost"]
+                * options["overdimension_heat_generators"]["central"],
+                lifetime=costs.at["decentral oil boiler", "lifetime"],
+            )
+
     n.add(
         "Link",
         nodes + " Fischer-Tropsch",
@@ -5099,6 +5318,36 @@ def add_industry(
                 efficiency4=costs.at["oil", "CO2 intensity"] * options["cc_fraction"],
                 lifetime=costs.at["waste CHP CC", "lifetime"],
             )
+
+        if cf_industry["waste_to_energy"]:
+            # heat-only (non-CHP) waste incineration; no dedicated cost
+            # technology exists for this in the cost database, so this
+            # approximates it using "waste CHP"'s heat efficiency figure
+            waste_heat_only_nodes = pd.Index(spatial.nodes)[
+                pd.Index(urban_central_nodes) != ""
+            ]
+            if len(waste_heat_only_nodes) > 0:
+                if options["regional_oil_demand"]:
+                    hvc_bus = pd.Series(
+                        spatial.oil.non_sequestered_hvc, index=spatial.nodes
+                    )
+                    hvc_bus0 = hvc_bus.loc[waste_heat_only_nodes].values
+                else:
+                    hvc_bus0 = spatial.oil.non_sequestered_hvc  # single EU-wide bus
+                n.add(
+                    "Link",
+                    waste_heat_only_nodes + " urban central waste boiler",
+                    bus0=hvc_bus0,
+                    bus1=waste_heat_only_nodes + " urban central heat",
+                    bus2="co2 atmosphere",
+                    carrier="urban central waste boiler",
+                    p_nom_extendable=True,
+                    capital_cost=costs.at["waste CHP", "capital_cost"]
+                    * costs.at["waste CHP", "efficiency-heat"],
+                    efficiency=costs.at["waste CHP", "efficiency-heat"],
+                    efficiency2=costs.at["oil", "CO2 intensity"],
+                    lifetime=costs.at["waste CHP", "lifetime"],
+                )
 
     # TODO simplify bus expression
     n.add(
@@ -6778,6 +7027,11 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
+
+    if options["heating"]:
+        apply_existing_chp_and_heat_capacities(
+            n, snakemake.input.existing_chp_heat_capacities
+        )
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_ENS_updated" # use this to keep track of runs with different settings
+  name: "sector_dk_se_29_09_co2_price_100_2013" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -40,6 +40,15 @@ electricity:
   estimate_battery_capacities: true
   transmission_limit: v1.0 #cannot expand transmission capacity
 
+
+#snapshots:
+#  start: "2019-01-01"
+#  end: "2020-01-01"
+#  inclusive: left
+
+#atlite:
+#  default_cutout: europe-2019-sarah3-era5
+
 atlite:
   cutouts:
     europe-2013-sarah3-era5:
@@ -50,7 +59,7 @@ atlite:
 
 costs:
   emission_prices: #Undersøg også "dynamic" funktionen
-    enable: false
+    enable: true
     co2: 100.0 #Husk . ellers virker den ikke
 
 clustering:
@@ -112,6 +121,9 @@ sector:
     enable: true
     fuel:
     - gas #virker tilsyneladende kun for gas og ikke waste eller biomass
+    - solid biomass
+    - coal
+    - oil
     micro_chp: false
   dac: false
   hydrogen_fuel_cell: false
@@ -120,6 +132,7 @@ sector:
   SMR_cc: false
   regional_oil_demand: true
   regional_coal_demand: false
+  oil_boilers: true
 
 
   hydrogen_underground_storage: false  
@@ -155,4 +168,7 @@ sector:
     max_amount: 1390
     upstream_emissions_factor: 0.1
 
+
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
+industry:
+  waste_to_energy: true

@@ -1641,6 +1641,7 @@ rule prepare_sector_network:
         heat_dsm_profile=resources(
             "residential_heat_dsm_profile_total_base_s_{clusters}.csv"
         ),
+        existing_chp_heat_capacities="data/existing_infrastructure/existing_chp_heat_capacitites.csv",
         co2_totals_name=resources("co2_totals.csv"),
         co2=rules.retrieve_ghg_emissions.output["csv"],
         biomass_potentials=resources(
