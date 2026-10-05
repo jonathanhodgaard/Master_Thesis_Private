@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_29_09_co2_price_100_2013" # use this to keep track of runs with different settings
+  name: "sector_dk_se_w_rooftop" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -35,7 +35,7 @@ electricity:
   estimate_renewable_capacities:
     enable: true
     from_powerplantmatching: true
-    from_irenastat: true
+    from_irenastat: false #Makes no difference if setting to true (at least not for Denmark). Also has no data for 2025.
     year: 2025
   estimate_battery_capacities: true
   transmission_limit: v1.0 #cannot expand transmission capacity

@@ -3016,6 +3016,155 @@ def apply_existing_chp_and_heat_capacities(
                 "or 'solar thermal'."
             )
 
+def apply_existing_rural_heat_capacities(
+    n: pypsa.Network,
+    existing_rural_heat_file: str,
+    keep_extendable: bool = True,
+) -> None:
+    """
+    Overlay existing rural (private household) heating capacities onto the
+    Links/Generators already built for this planning horizon.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        Network to modify. Must already contain the rural heating Links
+        and Generators (built earlier in `add_heat`).
+    existing_rural_heat_file : str
+        Path to CSV with columns node, heat_system, set, heating_capacity.
+        `heat_system` must be "residential rural". `set` is one of
+        "air heat pump", "ground heat pump", "gas boiler", "oil boiler",
+        "biomass boiler", "resistive heater", or "solar thermal".
+        heating_capacity is thermal output in MW; a row's `node` must
+        match an existing AC bus name.
+    keep_extendable : bool
+        If True, matched components keep p_nom_extendable=True with
+        p_nom_min set to the existing capacity, so the solver can build
+        beyond it. If False, capacity is fixed at the existing value.
+    """
+    capacities = pd.read_csv(existing_rural_heat_file)
+
+    allowed_heat_systems = ["residential rural"]
+    invalid = ~capacities.heat_system.isin(allowed_heat_systems)
+    if invalid.any():
+        raise ValueError(
+            f"Unsupported heat_system value(s) "
+            f"{sorted(capacities.heat_system[invalid].unique())} in "
+            f"{existing_rural_heat_file}; expected one of {allowed_heat_systems}."
+        )
+
+    # sum duplicate rows so they don't silently overwrite each other
+    capacities = capacities.groupby(
+        ["node", "heat_system", "set"], as_index=False
+    ).heating_capacity.sum()
+
+    # set -> (component, name suffix, sized in fuel/electricity input units)
+    set_definitions = {
+        "air heat pump": ("Link", "air heat pump", False),
+        "ground heat pump": ("Link", "ground heat pump", False),
+        "gas boiler": ("Link", "gas boiler", True),
+        "oil boiler": ("Link", "oil boiler", True),
+        "biomass boiler": ("Link", "biomass boiler", True),
+        "resistive heater": ("Link", "resistive heater", True),
+        "solar thermal": ("Generator", "solar thermal collector", False),
+    }
+
+    for row in capacities.itertuples():
+        if row.set not in set_definitions:
+            raise ValueError(
+                f"Unknown 'set' value '{row.set}' in {existing_rural_heat_file}; "
+                f"expected one of {list(set_definitions)}."
+            )
+
+        component, suffix, input_sized = set_definitions[row.set]
+        df = n.links if component == "Link" else n.generators
+        name = f"{row.node} {row.heat_system} {suffix}"
+        if name not in df.index:
+            name = name.replace("residential ", "").replace("services ", "")
+
+        if name not in df.index:
+            logger.warning(
+                f"No {component} '{name}' to attach existing capacity from "
+                f"{existing_rural_heat_file} to (check node spelling, or that "
+                "the technology is enabled in the sector config). Skipping."
+            )
+            continue
+
+        p_nom = row.heating_capacity
+        if input_sized:
+            # bus0 is fuel/electricity, so convert heat output to input
+            p_nom = p_nom / df.at[name, "efficiency"]
+
+        df.at[name, "p_nom"] = p_nom
+        df.at[name, "p_nom_min"] = p_nom
+        df.at[name, "p_nom_extendable"] = keep_extendable
+
+def apply_existing_solar_rooftop_capacities(
+    n: pypsa.Network,
+    existing_solar_rooftop_file: str,
+    keep_extendable: bool = True,
+) -> None:
+    """
+    Overlay existing rooftop PV capacities onto the 'solar rooftop'
+    generators created in `insert_electricity_distribution_grid`.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        Network to modify. Must already contain 'solar rooftop' generators
+        on the low voltage buses.
+    existing_solar_rooftop_file : str
+        Path to CSV with columns node, capacity. `node` must match an
+        existing AC bus name; `capacity` is electrical capacity in MW.
+        These units must already be removed from the powerplants data,
+        otherwise they are counted twice (as utility and rooftop PV).
+    keep_extendable : bool
+        If True, rooftop generators stay extendable with p_nom_min set to
+        the existing capacity. If False, capacity is fixed at that value.
+    """
+    capacities = pd.read_csv(existing_solar_rooftop_file)
+
+    # sum duplicate rows so they don't silently overwrite each other
+    capacities = capacities.groupby("node").capacity.sum()
+
+    for node, capacity in capacities.items():
+        gens = n.generators.index[
+            (n.generators.carrier == "solar rooftop")
+            & (n.generators.bus == f"{node} low voltage")
+        ]
+
+        if gens.empty:
+            logger.warning(
+                f"No 'solar rooftop' generator at '{node} low voltage' to attach "
+                f"existing capacity from {existing_solar_rooftop_file} to (check "
+                "node spelling, or that electricity_distribution_grid is enabled). "
+                "Skipping."
+            )
+            continue
+
+        # with several resource classes per node, split by rooftop potential
+        # (split equally if no potential is available)
+        p_nom_max = n.generators.loc[gens, "p_nom_max"].fillna(0)
+        if p_nom_max.sum() > 0:
+            p_nom = capacity * p_nom_max / p_nom_max.sum()
+        else:
+            p_nom = pd.Series(capacity / len(gens), index=gens)
+
+        # existing capacity always takes precedence over the estimated potential
+        exceeds = p_nom > p_nom_max
+        if exceeds.any():
+            logger.warning(
+                f"Existing rooftop PV at {node} ({capacity:.1f} MW) exceeds the "
+                f"estimated rooftop potential ({p_nom_max.sum():.1f} MW). "
+                "Raising p_nom_max to the existing capacity."
+            )
+            n.generators.loc[gens[exceeds], "p_nom_max"] = p_nom[exceeds]
+
+        n.generators.loc[gens, "p_nom"] = p_nom
+        n.generators.loc[gens, "p_nom_min"] = p_nom
+        n.generators.loc[gens, "p_nom_extendable"] = keep_extendable
+
+        logger.info(f"Set existing rooftop PV at {node} to {capacity:.1f} MW.")
 
 def add_heat(
     n: pypsa.Network,
@@ -7032,7 +7181,13 @@ if __name__ == "__main__":
         apply_existing_chp_and_heat_capacities(
             n, snakemake.input.existing_chp_heat_capacities
         )
-
+        apply_existing_rural_heat_capacities(
+            n, snakemake.input.existing_rural_heat_capacities
+        )
+    if options["electricity_distribution_grid"]:
+        apply_existing_solar_rooftop_capacities(
+            n, snakemake.input.existing_solar_rooftop_capacities
+        )
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 
     sanitize_carriers(n, snakemake.config)
