@@ -53,6 +53,8 @@ config/scenarios.yaml
 data/gas_network/scigrid-gas/
 data/costs_*.csv
 !/data/custom_costs.csv
+!/data/existing_infrastructure/
+!/data/powerplants/
 
 dask-worker-space/
 publications.jrc.ec.europa.eu/
