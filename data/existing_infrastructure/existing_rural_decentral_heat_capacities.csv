@@ -1,0 +1,21 @@
+node,heat_system,set,heating_capacity
+DK0 0AC,residential rural,air heat pump,199.09639124319813
+DK0 0AC,residential rural,biomass boiler,224.50190576300182
+DK0 0AC,residential rural,gas boiler,144.89180542432388
+DK0 0AC,residential rural,oil boiler,35.369966012051975
+DK0 0AC,residential rural,resistive heater,1.8720315574238295
+DK0 0AC,residential urban decentral,air heat pump,654.1738569419374
+DK0 0AC,residential urban decentral,biomass boiler,737.6491189355783
+DK0 0AC,residential urban decentral,gas boiler,476.07307496563624
+DK0 0AC,residential urban decentral,oil boiler,116.21560261102806
+DK0 0AC,residential urban decentral,resistive heater,6.150960831535447
+DK1 0AC,residential rural,air heat pump,199.09639124319813
+DK1 0AC,residential rural,biomass boiler,224.50190576300182
+DK1 0AC,residential rural,gas boiler,144.89180542432388
+DK1 0AC,residential rural,oil boiler,35.369966012051975
+DK1 0AC,residential rural,resistive heater,1.8720315574238295
+DK1 0AC,residential urban decentral,air heat pump,654.1738569419374
+DK1 0AC,residential urban decentral,biomass boiler,737.6491189355783
+DK1 0AC,residential urban decentral,gas boiler,476.07307496563624
+DK1 0AC,residential urban decentral,oil boiler,116.21560261102806
+DK1 0AC,residential urban decentral,resistive heater,6.150960831535447

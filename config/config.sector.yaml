@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_w_rooftop" # use this to keep track of runs with different settings
+  name: "sector_dk_se_non_ext" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -49,6 +49,8 @@ electricity:
 #atlite:
 #  default_cutout: europe-2019-sarah3-era5
 
+co2_budget: null #no co2 budget, only a co2 price for this run
+
 atlite:
   cutouts:
     europe-2013-sarah3-era5:
@@ -58,6 +60,7 @@ atlite:
       time: ["2013-01-01", "2013-12-31"]
 
 costs:
+  year: 2025
   emission_prices: #Undersøg også "dynamic" funktionen
     enable: true
     co2: 100.0 #Husk . ellers virker den ikke
@@ -97,8 +100,9 @@ pypsa_eur: #What to keep when converting from PyPSA-Eur to PyPSA-Eur-Sec
 sector:
   district_heating:
     potential:
-      DK: 0.9    #https://dbdh.org/all-about-district-energy/district-heating-in-denmark/
-      default: 0.1 #Lavet om HUSK AT LAV DET OM
+      DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
+                   #0.7/0.93= 0.752. 0.93 is the share of people living in urban areas in Denmark according to pypsa-eur workflow.
+      default: 0.0 #Uses historic values
     progress:
         2025: 1.0
   heat_pump_sources: #This section is the default, but is considered conservative.
@@ -108,7 +112,6 @@ sector:
     - air
     rural:
     - air
-    - ground
   #For residential heat, we can enable dsm = true when doing 2035.
   #Keep eye on bev_dsm_availability
   v2g: false #turn on by 2035? https://ens.dk/media/8525/download 
@@ -128,7 +131,6 @@ sector:
   dac: false
   hydrogen_fuel_cell: false
   hydrogen_turbine: false
-  SMR: false
   SMR_cc: false
   regional_oil_demand: true
   regional_coal_demand: false

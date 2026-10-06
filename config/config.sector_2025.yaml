@@ -1,0 +1,139 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+#tutorial: true
+
+
+run:
+  name: "sector_dk_se_2025" # use this to keep track of runs with different settings
+  disable_progressbar: true
+
+
+
+scenario:
+  clusters:
+  - 8
+  planning_horizons:
+  - 2025 # setting horizon to 2025
+
+
+
+countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
+#countries: ['DK', 'SE']
+
+snapshots:
+  start: "2013-01-01"
+  end: "2014-01-01"
+  inclusive: left
+
+co2_budget: null #no co2 budget, only a co2 price for this run
+
+electricity:
+  extendable_carriers:
+    Generator: []
+    StorageUnit: []
+    Store: []
+    Link: []
+    
+  estimate_renewable_capacities:
+    year: 2025
+  estimate_battery_capacities: true
+  transmission_limit: v1.0 #cannot expand transmission capacity
+
+atlite:
+  cutouts:
+    "europe-2013-sarah3-era5":
+      module: era5
+      x: [-12., 32.0]
+      y: [47.0, 72.0] 
+      time: ["2013-01-01", "2013-12-31"]
+
+#conventional: dynamic_fuel_price?
+
+
+
+foresight: overnight   # top-level key, not under scenario — sector-coupled runs need this set
+#foresight: myopic
+
+sector:
+  district_heating:
+    potential:
+      DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
+                   #0.7/0.93= 0.752. 0.93 is the share of people living in urban areas in Denmark according to pypsa-eur workflow.
+      default: 0.0 #Uses historic values
+    progress:
+        2025: 1.0
+  heat_pump_sources:
+    rural:
+    - air #ASSUMPTION of only air heat pump for rural data. No data available on heat pump type.
+  #For residential heat, we can enable dsm = true when doing 2035.
+  bev_dsm: false #Almost negiligible effect on 2025. Can be set to true for 2035.
+  v2g: false #turn on by 2035? https://ens.dk/media/8525/download 
+  #There is no option to make special land_transport_electric_share specific for Denmark
+  #retrogen for 2035 might be a good idea to set true
+  #ASSUMPTION: land transport electric share is default 0.05 for 2025, which is a fine assumption for northern europe 2025.
+  overdimension_heat_generators: #no oversizing, since we have the actual heat capacity
+    decentral: 1.0 
+  chp:
+    enable: true
+    fuel:
+    - gas
+    - solid biomass
+    - coal #Added ourselves in codebase
+    - oil #Added ourselves in codebase
+    micro_chp: false
+  dac: false #All the next settings are basically non-existing in northern europe.
+  hydrogen_fuel_cell: false
+  hydrogen_turbine: false
+  SMR_cc: false
+  oil_boilers: true
+
+
+  hydrogen_underground_storage: false  
+  methanol: #basically non-existing in northern europe, so we set all to false
+    methanol_to_power:
+      ccgt: false
+      ccgt_cc: false
+      ocgt: false
+      allam: false
+    biomass_to_methanol: false
+
+  ammonia: false
+
+  H2_network: false
+
+  biomass_transport: true
+
+  conventional_generation:
+    OCGT: gas
+    CCGT: gas
+    coal: coal
+    lignite: lignite
+    oil: oil
+    #nuclear: uranium #makes no difference
+    biomass: biomass          # was "solid biomass", that's not a spatial attribute. Might be resulting in
+    #Misvisende tal. CHECK.
+    
+
+  electrobiofuels: false #basically non-existing in commercial scale 2025.
+  municipal_solid_waste: true
+  solid_biomass_import: #do dynamic pricing instead of fixed? As per the default setting.
+    enable: true
+
+
+# docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
+industry:
+  waste_to_energy: true
+
+
+costs:
+  year: 2025
+  emission_prices: #Undersøg også "dynamic" funktionen
+    enable: true
+    co2: 83.6 #Average of 2025 across the selected countries
+    #https://taxfoundation.org/data/all/eu/carbon-taxes-europe/
+
+clustering:
+  temporal:
+    resolution_sector: 1h  

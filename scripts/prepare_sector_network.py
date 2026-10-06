@@ -3016,7 +3016,7 @@ def apply_existing_chp_and_heat_capacities(
                 "or 'solar thermal'."
             )
 
-def apply_existing_rural_heat_capacities(
+def apply_existing_rural_decentral_heat_capacities(
     n: pypsa.Network,
     existing_rural_heat_file: str,
     keep_extendable: bool = True,
@@ -3024,15 +3024,29 @@ def apply_existing_rural_heat_capacities(
     """
     Overlay existing rural (private household) heating capacities onto the
     Links/Generators already built for this planning horizon.
+    
+    Overlay existing decentral (private household) heating capacities onto
+    the Links/Generators already built for this planning horizon.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        Network to modify. Must already contain the decentral heating Links
+        and Generators (built earlier in `add_heat`).
+    existing_rural_heat_file : str
+        Path to CSV with columns node, heat_system, set, heating_capacity.
+        `heat_system` must be "residential rural" or "residential urban
+        decentral". `set` is one of
 
     Parameters
     ----------
     n : pypsa.Network
         Network to modify. Must already contain the rural heating Links
         and Generators (built earlier in `add_heat`).
-    existing_rural_heat_file : str
+        existing_rural_heat_file : str
         Path to CSV with columns node, heat_system, set, heating_capacity.
-        `heat_system` must be "residential rural". `set` is one of
+        `heat_system` must be "residential rural" or "residential urban
+        decentral". `set` is one of
         "air heat pump", "ground heat pump", "gas boiler", "oil boiler",
         "biomass boiler", "resistive heater", or "solar thermal".
         heating_capacity is thermal output in MW; a row's `node` must
@@ -3044,7 +3058,7 @@ def apply_existing_rural_heat_capacities(
     """
     capacities = pd.read_csv(existing_rural_heat_file)
 
-    allowed_heat_systems = ["residential rural"]
+    allowed_heat_systems = ["residential rural", "residential urban decentral"]
     invalid = ~capacities.heat_system.isin(allowed_heat_systems)
     if invalid.any():
         raise ValueError(
@@ -7181,8 +7195,8 @@ if __name__ == "__main__":
         apply_existing_chp_and_heat_capacities(
             n, snakemake.input.existing_chp_heat_capacities
         )
-        apply_existing_rural_heat_capacities(
-            n, snakemake.input.existing_rural_heat_capacities
+        apply_existing_rural_decentral_heat_capacities(
+            n, snakemake.input.existing_rural_decentral_heat_capacities
         )
     if options["electricity_distribution_grid"]:
         apply_existing_solar_rooftop_capacities(
@@ -7190,6 +7204,17 @@ if __name__ == "__main__":
         )
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 
+    if investment_year == 2025:
+        for df in [n.links, n.generators]:
+            fix = (
+                df.index.str.startswith("DK")
+                & df.p_nom_extendable
+                & (df.p_nom_min > 0)
+            )
+            df.loc[fix, "p_nom_extendable"] = False
+            logger.info(
+                f"Fixed {fix.sum()} Danish components: {sorted(df.loc[fix, 'carrier'].unique())}"
+            )
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)
 
