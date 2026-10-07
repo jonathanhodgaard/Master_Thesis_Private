@@ -7206,15 +7206,29 @@ if __name__ == "__main__":
 
     if investment_year == 2025:
         for df in [n.links, n.generators]:
+            # decentral gas boilers stay extendable to cover services and
+            # agriculture heat not in the existing-capacity data
+            keep_extendable = df.carrier.str.contains("(rural|urban decentral) gas boiler")
             fix = (
                 df.index.str.startswith("DK")
                 & df.p_nom_extendable
                 & (df.p_nom_min > 0)
+                & ~keep_extendable
             )
             df.loc[fix, "p_nom_extendable"] = False
             logger.info(
                 f"Fixed {fix.sum()} Danish components: {sorted(df.loc[fix, 'carrier'].unique())}"
             )
+        # fix Danish pit thermal storage at existing capacity (MWh); 0 = no pits
+        existing_pits_MWh = {"DK0 0AC": 45_000, "DK1 0AC": 55_000}
+        for node, e_nom in existing_pits_MWh.items():
+            store = f"{node} urban central water pits"
+            n.stores.loc[store, ["e_nom", "e_nom_min", "e_nom_extendable"]] = [e_nom, e_nom, False]
+            for kind in ["charger", "discharger"]:
+                link = f"{store} {kind}"
+                p_nom = e_nom / n.links.at[f"{store} charger", "energy to power ratio"]
+                n.links.loc[link, ["p_nom", "p_nom_min", "p_nom_extendable"]] = [p_nom, p_nom, False]    
+
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)
 

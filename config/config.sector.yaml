@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_non_ext" # use this to keep track of runs with different settings
+  name: "sector_dk_se_fullyear_gas_ext_pit_fixed" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -42,8 +42,8 @@ electricity:
 
 
 #snapshots:
-#  start: "2019-01-01"
-#  end: "2020-01-01"
+#  start: "2013-01-01"
+#  end: "2013-02-01"
 #  inclusive: left
 
 #atlite:
@@ -67,7 +67,7 @@ costs:
 
 clustering:
   temporal:
-    resolution_sector: 24h  
+    resolution_sector: 1h  
 
 foresight: overnight   # top-level key, not under scenario — sector-coupled runs need this set
 #foresight: myopic
