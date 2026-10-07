@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_fullyear_gas_ext_pit_fixed" # use this to keep track of runs with different settings
+  name: "sector_dk_se_24h_hot_water_incl" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
