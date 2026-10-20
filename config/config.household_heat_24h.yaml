@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+# SPDX-License-Identifier: CC0-1.0
+# Load AFTER config/config.sector_2025.yaml. Keeps its selected countries,
+# weather year, fixed equipment and costs. Reuses completed preprocessing.
+run:
+  name: sector_dk_se_2025
+
+clustering:
+  temporal:
+    resolution_sector: 24h
+
+sector:
+  cluster_heat_buses: true
+  residential_heat:
+    dsm:
+      enable: false
+  household_heat_allocation:
+    enable: true
+    # Explicitly exclude unbuilt solar collectors and vents only on the
+    # selected household buses; installed auxiliary equipment still raises.
+    remove_unbuilt_auxiliaries: true
+
+solving:
+  options:
+    # Household constraints are called directly by solve_network.py.
+    # Disable the default example hook, whose file is absent in this checkout.
+    custom_extra_functionality: null

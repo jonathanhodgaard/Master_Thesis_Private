@@ -51,6 +51,12 @@ from scripts._helpers import (
     update_config_from_wildcards,
 )
 
+from scripts.household_heat_constraints import (
+    prepare_household_heat_network,
+    add_household_heat_constraints,
+    save_household_heat_shares,
+)
+
 logger = logging.getLogger(__name__)
 
 # Allow for PyPSA versions <0.35
@@ -1060,13 +1066,17 @@ def add_battery_constraints(n):
 
 
 def add_lossy_bidirectional_link_constraints(n):
-    if not n.links.p_nom_extendable.any() or not any(n.links.get("reversed", [])):
+    reversed_links = n.links.get(
+        "reversed", pd.Series(False, index=n.links.index)
+    ).fillna(False).astype(bool)
+    if not n.links.p_nom_extendable.any() or not reversed_links.any():
         return
 
-    carriers = n.links.loc[n.links.reversed, "carrier"].unique()  # noqa: F841
-    backwards = n.links.query(
-        "carrier in @carriers and p_nom_extendable and reversed and active"
-    ).index
+    backwards = n.links.index[
+        reversed_links & n.links.p_nom_extendable & n.links.active
+    ]
+    if backwards.empty:
+        return
     forwards = backwards.str.replace("-reversed", "")
     lhs = n.model["Link-p_nom"].loc[backwards]
     rhs = n.model["Link-p_nom"].loc[forwards]
@@ -1299,6 +1309,8 @@ def extra_functionality(
 
     if config["sector"]["imports"]["enable"]:
         add_import_limit_constraint(n, snapshots)
+    
+    add_household_heat_constraints(n, snapshots)
 
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
@@ -1512,6 +1524,9 @@ if __name__ == "__main__":
         limit_max_growth=snakemake.params.get("sector", {}).get("limit_max_growth"),
         rolling_horizon=cf_solving["rolling_horizon"],
     )
+    
+    # prepare household heat network before solving
+    prepare_household_heat_network(n, snakemake.config)
 
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)
@@ -1610,7 +1625,16 @@ if __name__ == "__main__":
     if status == SolverStatus.warning:
         raise RuntimeError("Solving status 'warning'. Discarding solution.")
 
-    n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
+    save_household_heat_shares(
+        n, snakemake.output.household_heat_shares
+    )
+    
+    n.meta = {
+        **n.meta,
+        **snakemake.config,
+        "wildcards": dict(snakemake.wildcards),
+    }
+    
     n.export_to_netcdf(snakemake.output.network)
 
     if snakemake.output.get("model"):

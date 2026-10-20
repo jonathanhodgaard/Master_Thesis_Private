@@ -13,6 +13,12 @@ rule solve_sector_network:
         + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
         config=RESULTS
         + "configs/config.base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.yaml",
+        household_heat_shares=(
+            RESULTS
+            + "csvs/household_heat_shares_base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.csv"
+            if config["sector"].get("household_heat_allocation", {}).get("enable", False)
+            else []
+        ),
         model=(
             RESULTS
             + "models/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
