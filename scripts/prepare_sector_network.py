@@ -49,6 +49,18 @@ from scripts.prepare_network import maybe_adjust_costs_and_potentials
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
 
+# EV share of passenger car driving per country and investment year.
+# PLACEHOLDER VALUES - replace with sourced data.
+# Every country in the network must be listed for every year you solve.
+LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY = {
+    "NL": {2025: 0.06, 2035: 0.40},
+    "DE": {2025: 0.04, 2035: 0.35},
+    "DK": {2025: 0.25, 2035: 0.65},
+    "SE": {2025: 0.10, 2035: 0.50},
+    "NO": {2025: 0.30, 2035: 0.80},
+    "FI": {2025: 0.04, 2035: 0.35},
+    "GB": {2025: 0.05, 2035: 0.40},
+}
 
 def define_spatial(nodes, options):
     """
@@ -2642,7 +2654,7 @@ def add_ice_cars(
     )
 
     # Calculate oil demand profile
-    profile = ice_share * p_set.div(efficiency).rename(
+    profile = (ice_share * p_set.div(efficiency)).rename(
         columns=lambda x: x + " land transport oil"
     )
 
@@ -2747,22 +2759,70 @@ def add_land_transport(
     dsm_profile = pd.read_csv(dsm_profile_file, index_col=0, parse_dates=True)
 
     # exogenous share of passenger car type
-    engine_types = ["fuel_cell", "electric", "ice"]
-    shares = pd.Series()
-    for engine in engine_types:
-        share_key = f"land_transport_{engine}_share"
-        shares[engine] = get(options[share_key], investment_year)
-        if logger:
-            logger.info(f"{engine} share: {shares[engine] * 100}%")
+    #engine_types = ["fuel_cell", "electric", "ice"]
+    #shares = pd.Series()
+    #for engine in engine_types:
+    #    share_key = f"land_transport_{engine}_share"
+    #    shares[engine] = get(options[share_key], investment_year)
+    #    if logger:
+    #        logger.info(f"{engine} share: {shares[engine] * 100}%")
 
-    check_land_transport_shares(shares)
+    #check_land_transport_shares(shares)
+
+    #p_set = transport[nodes]
+
+
+    # exogenous share of passenger car type, per node
+    nodes = pd.Index(nodes)
+    node_country = nodes.str[:2]  # "DK1 0" -> "DK"
+
+    # Stop if a country is missing from the table
+    missing_ct = set(node_country) - set(LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY)
+    if missing_ct:
+        raise ValueError(f"No EV share defined for countries: {sorted(missing_ct)}")
+
+    # Stop if a country has no value for the year being solved
+    missing_year = [
+        ct
+        for ct in set(node_country)
+        if investment_year not in LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY[ct]
+    ]
+    if missing_year:
+        raise ValueError(
+            f"No EV share for year {investment_year} in countries: {sorted(missing_year)}"
+        )
+
+    # One EV share per country for this year, e.g. DK -> 0.20
+    ct_electric = pd.Series(
+        {
+            ct: LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY[ct][investment_year]
+            for ct in set(node_country)
+        }
+    )
+
+    # Table with one row per node and one column per car type
+    shares = pd.DataFrame(index=nodes)
+    shares["electric"] = node_country.map(ct_electric).to_numpy()
+    shares["fuel_cell"] = get(options["land_transport_fuel_cell_share"], investment_year)
+    shares["ice"] = 1 - shares["electric"] - shares["fuel_cell"]
+
+    # Stop if any share is below 0 or above 1
+    if not shares.ge(0).all().all() or not shares.le(1).all().all():
+        raise ValueError(f"Land transport shares outside [0, 1]:\n{shares}")
+
+    if logger:
+        logger.info(
+            f"Land transport shares {investment_year} per country:\n"
+            + shares.groupby(node_country).first().to_string()
+        )
 
     p_set = transport[nodes]
+
 
     # temperature for correction factor for heating/cooling
     temperature = xr.open_dataarray(temp_air_total_file).to_pandas()
 
-    if shares["electric"] > 0:
+    if (shares["electric"] > 0).any():
         add_EVs(
             n,
             avail_profile,
@@ -2775,7 +2835,7 @@ def add_land_transport(
             options,
         )
 
-    if shares["fuel_cell"] > 0:
+    if (shares["fuel_cell"] > 0).any():
         add_fuel_cell_cars(
             n=n,
             p_set=p_set,
@@ -2784,7 +2844,7 @@ def add_land_transport(
             options=options,
             spatial=spatial,
         )
-    if shares["ice"] > 0:
+    if (shares["ice"] > 0).any():
         add_ice_cars(
             n,
             costs,
@@ -2863,6 +2923,18 @@ def build_heat_demand(
     )
 
     return heat_demand
+
+
+def danish_zone_nodes(n: pypsa.Network) -> dict:
+    """
+    Map Danish bidding zones to the model's AC node names by location:
+    DK1 (west, Jutland/Funen) and DK2 (east, Zealand). The node names
+    themselves depend on sub-network numbering and can differ between runs.
+    """
+    dk = n.buses[(n.buses.carrier == "AC") & (n.buses.country == "DK")]
+    assert len(dk) == 2, f"Expected 2 Danish AC nodes, found {list(dk.index)}"
+    west, east = dk.sort_values("x").index
+    return {"DK1": west, "DK2": east}
 
 
 def apply_existing_chp_and_heat_capacities(
@@ -7235,6 +7307,24 @@ if __name__ == "__main__":
             df.loc[fix, "p_nom_extendable"] = False
             logger.info(
                 f"Fixed {fix.sum()} Danish components: {sorted(df.loc[fix, 'carrier'].unique())}"
+            )
+            #These carriers are getting built because 
+            # they have no existing capacity and therefore no p_nom_min > 0, but we don't want them to be built in 2025.
+            no_new = df.index.str.startswith("DK") & (
+                df.carrier.isin([
+                    "urban central coal CHP",
+                    "urban central oil CHP",
+                    "coal",
+                    "lignite",
+                    "CCGT",
+                    "OCGT",
+                ])
+                | df.carrier.str.endswith(" CC")
+            )
+            df.loc[no_new, "p_nom_extendable"] = False
+            df.loc[no_new, "p_nom"] = df.loc[no_new, "p_nom_min"]
+            logger.info(
+                f"Blocked new Danish capacity for: {sorted(df.loc[no_new, 'carrier'].unique())}"
             )
         # fix Danish pit thermal storage at existing capacity (MWh); 0 = no pits
         existing_pits_MWh = {"DK0 0AC": 45_000, "DK1 0AC": 55_000}

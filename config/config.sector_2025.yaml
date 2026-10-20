@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_2025" # use this to keep track of runs with different settings
+  name: "sector_NE_june_july_2025" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
