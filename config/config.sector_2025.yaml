@@ -6,14 +6,14 @@
 
 
 run:
-  name: "sector_dk_se_2025" # use this to keep track of runs with different settings
+  name: "sector_NE_june_july_2025" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
 
 scenario:
   clusters:
-  - 8
+  - 9
   planning_horizons:
   - 2025 # setting horizon to 2025
 
