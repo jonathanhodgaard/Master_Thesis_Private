@@ -7279,7 +7279,15 @@ if __name__ == "__main__":
         n, snakemake.params["adjustments"], investment_year
     )
 
-    existing_node_map = options.get("existing_capacity_node_map", {})
+    # Start with any explicitly configured aliases.
+    existing_node_map = dict(
+        options.get("existing_capacity_node_map", {})
+    )
+
+    # Map CSV bidding-zone labels DK1/DK2 to this network's AC buses.
+    dk_nodes = danish_zone_nodes(n)
+    existing_node_map.update(dk_nodes)
+    
     if options["heating"]:
         apply_existing_chp_and_heat_capacities(
             n, snakemake.input.existing_chp_heat_capacities, node_map=existing_node_map
@@ -7327,8 +7335,13 @@ if __name__ == "__main__":
                 f"Blocked new Danish capacity for: {sorted(df.loc[no_new, 'carrier'].unique())}"
             )
         # fix Danish pit thermal storage at existing capacity (MWh); 0 = no pits
-        existing_pits_MWh = {"DK0 0AC": 45_000, "DK1 0AC": 55_000}
-        apply_existing_pit_capacities(n, existing_pits_MWh, node_map=existing_node_map)
+        existing_pits_MWh = {
+            "DK2": 45_000,  # Eastern Denmark
+            "DK1": 55_000,  # Western Denmark
+        }
+        apply_existing_pit_capacities(
+            n, existing_pits_MWh, node_map=existing_node_map
+        )
 
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)
