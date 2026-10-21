@@ -40,6 +40,10 @@ from scripts.build_co2_totals import build_co2_totals, build_eea_co2, build_euro
 from scripts.build_transport_demand import transport_degree_factor
 from scripts.definitions.heat_sector import HeatSector
 from scripts.definitions.heat_system import HeatSystem
+from scripts.existing_capacity_nodes import (
+    apply_existing_pit_capacities,
+    map_existing_capacity_nodes,
+)
 from scripts.prepare_network import maybe_adjust_costs_and_potentials
 
 spatial = SimpleNamespace()
@@ -2937,6 +2941,7 @@ def apply_existing_chp_and_heat_capacities(
     n: pypsa.Network,
     existing_chp_heat_file: str,
     keep_extendable: bool = True,
+    node_map: dict | None = None,
 ) -> None:
     """
     Overlay existing urban central CHP and heat-only capacities onto the
@@ -2965,8 +2970,7 @@ def apply_existing_chp_and_heat_capacities(
         set to the existing capacity, so the solver can build beyond it.
         If False, capacity is fixed at the existing value.
     """
-    capacities = pd.read_csv(existing_chp_heat_file)
-    capacities["node"] = capacities["node"].replace(danish_zone_nodes(n))
+    capacities = map_existing_capacity_nodes(n, pd.read_csv(existing_chp_heat_file), node_map)
 
     # carriers whose CHP/boiler Links don't follow the generic
     # "{node} urban central {carrier} CHP/boiler" naming pattern
@@ -3093,6 +3097,7 @@ def apply_existing_rural_decentral_heat_capacities(
     n: pypsa.Network,
     existing_rural_heat_file: str,
     keep_extendable: bool = True,
+    node_map: dict | None = None,
 ) -> None:
     """
     Overlay existing rural (private household) heating capacities onto the
@@ -3129,8 +3134,7 @@ def apply_existing_rural_decentral_heat_capacities(
         p_nom_min set to the existing capacity, so the solver can build
         beyond it. If False, capacity is fixed at the existing value.
     """
-    capacities = pd.read_csv(existing_rural_heat_file)
-    capacities["node"] = capacities["node"].replace(danish_zone_nodes(n))
+    capacities = map_existing_capacity_nodes(n, pd.read_csv(existing_rural_heat_file), node_map)
 
     allowed_heat_systems = ["residential rural", "residential urban decentral"]
     invalid = ~capacities.heat_system.isin(allowed_heat_systems)
@@ -3191,6 +3195,7 @@ def apply_existing_solar_rooftop_capacities(
     n: pypsa.Network,
     existing_solar_rooftop_file: str,
     keep_extendable: bool = True,
+    node_map: dict | None = None,
 ) -> None:
     """
     Overlay existing rooftop PV capacities onto the 'solar rooftop'
@@ -3210,8 +3215,7 @@ def apply_existing_solar_rooftop_capacities(
         If True, rooftop generators stay extendable with p_nom_min set to
         the existing capacity. If False, capacity is fixed at that value.
     """
-    capacities = pd.read_csv(existing_solar_rooftop_file)
-    capacities["node"] = capacities["node"].replace(danish_zone_nodes(n))
+    capacities = map_existing_capacity_nodes(n, pd.read_csv(existing_solar_rooftop_file), node_map)
 
     # sum duplicate rows so they don't silently overwrite each other
     capacities = capacities.groupby("node").capacity.sum()
@@ -6349,11 +6353,13 @@ aggregate_dict = {
 }
 
 
-def cluster_heat_buses(n):
+def cluster_heat_buses(n, preserve_household_loads=False):
     """
     Cluster residential and service heat buses to one representative bus.
 
-    This can be done to save memory and speed up optimisation
+    This can be done to save memory and speed up optimisation.
+    Optionally retain residential Load names/time series while merging their
+    buses, so household allocation can distinguish services/agricultural demand.
     """
 
     def define_clustering(attributes, aggregate_dict):
@@ -6396,9 +6402,15 @@ def cluster_heat_buses(n):
             lambda x: x.str.replace("residential ", "").str.replace("services ", ""),
             axis=1,
         )
-        df = df.rename(
-            index=lambda x: x.replace("residential ", "").replace("services ", "")
-        )
+
+        def renamer(s):
+            if preserve_household_loads and c.name == "Load" and s.endswith(
+                (" residential rural heat", " residential urban decentral heat")
+            ):
+                return s
+            return s.replace("residential ", "").replace("services ", "")
+
+        df = df.rename(index=renamer)
 
         # cluster heat nodes
         # static dataframe
@@ -6408,10 +6420,6 @@ def cluster_heat_buses(n):
         pnl = c.dynamic
         agg = define_clustering(pd.Index(pnl.keys()), aggregate_dict)
         for k in pnl.keys():
-
-            def renamer(s):
-                return s.replace("residential ", "").replace("services ", "")
-
             pnl[k] = pnl[k].T.groupby(renamer).agg(agg[k]).T
 
         # remove unclustered assets of service/residential
@@ -7260,22 +7268,36 @@ if __name__ == "__main__":
     )
 
     if options["cluster_heat_buses"] and not first_year_myopic:
-        cluster_heat_buses(n)
+        cluster_heat_buses(
+            n,
+            preserve_household_loads=options.get("household_heat_allocation", {}).get(
+                "enable", False
+            ),
+        )
 
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
 
+    # Start with any explicitly configured aliases.
+    existing_node_map = dict(
+        options.get("existing_capacity_node_map", {})
+    )
+
+    # Map CSV bidding-zone labels DK1/DK2 to this network's AC buses.
+    dk_nodes = danish_zone_nodes(n)
+    existing_node_map.update(dk_nodes)
+    
     if options["heating"]:
         apply_existing_chp_and_heat_capacities(
-            n, snakemake.input.existing_chp_heat_capacities
+            n, snakemake.input.existing_chp_heat_capacities, node_map=existing_node_map
         )
         apply_existing_rural_decentral_heat_capacities(
-            n, snakemake.input.existing_rural_decentral_heat_capacities
+            n, snakemake.input.existing_rural_decentral_heat_capacities, node_map=existing_node_map
         )
     if options["electricity_distribution_grid"]:
         apply_existing_solar_rooftop_capacities(
-            n, snakemake.input.existing_solar_rooftop_capacities
+            n, snakemake.input.existing_solar_rooftop_capacities, node_map=existing_node_map
         )
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 
@@ -7313,15 +7335,13 @@ if __name__ == "__main__":
                 f"Blocked new Danish capacity for: {sorted(df.loc[no_new, 'carrier'].unique())}"
             )
         # fix Danish pit thermal storage at existing capacity (MWh); 0 = no pits
-        dk_nodes = danish_zone_nodes(n)
-        existing_pits_MWh = {dk_nodes["DK2"]: 45_000, dk_nodes["DK1"]: 55_000}
-        for node, e_nom in existing_pits_MWh.items():
-            store = f"{node} urban central water pits"
-            n.stores.loc[store, ["e_nom", "e_nom_min", "e_nom_extendable"]] = [e_nom, e_nom, False]
-            for kind in ["charger", "discharger"]:
-                link = f"{store} {kind}"
-                p_nom = e_nom / n.links.at[f"{store} charger", "energy to power ratio"]
-                n.links.loc[link, ["p_nom", "p_nom_min", "p_nom_extendable"]] = [p_nom, p_nom, False]    
+        existing_pits_MWh = {
+            "DK2": 45_000,  # Eastern Denmark
+            "DK1": 55_000,  # Western Denmark
+        }
+        apply_existing_pit_capacities(
+            n, existing_pits_MWh, node_map=existing_node_map
+        )
 
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)
