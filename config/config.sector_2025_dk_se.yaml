@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_EV_country_shares" # use this to keep track of runs with different settings
+  name: "sector_dk_se_1h_2025_EV_country_shares" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 

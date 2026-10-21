@@ -49,13 +49,13 @@ logger = logging.getLogger(__name__)
 # PLACEHOLDER VALUES - replace with sourced data.
 # Every country in the network must be listed for every year you solve.
 LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY = {
-    "NL": {2025: 0.06, 2035: 0.40},
-    "DE": {2025: 0.04, 2035: 0.35},
-    "DK": {2025: 0.25, 2035: 0.65},
-    "SE": {2025: 0.10, 2035: 0.50},
-    "NO": {2025: 0.30, 2035: 0.80},
-    "FI": {2025: 0.04, 2035: 0.35},
-    "GB": {2025: 0.05, 2035: 0.40},
+    "NL": {2025: 0.06, 2035: 0.13},
+    "DE": {2025: 0.04, 2035: 0.06},
+    "DK": {2025: 0.25, 2035: 0.23}, #https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer
+    "SE": {2025: 0.10, 2035: 0.16},
+    "NO": {2025: 0.30, 2035: 0.36},
+    "FI": {2025: 0.04, 2035: 0.12},
+    "GB": {2025: 0.05, 2035: 0.07},
 }
 
 def define_spatial(nodes, options):
