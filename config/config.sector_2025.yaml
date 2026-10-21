@@ -56,10 +56,6 @@ foresight: overnight   # top-level key, not under scenario — sector-coupled ru
 #foresight: myopic
 
 sector:
-  # Western Denmark was DK1 in the smaller network; the 10-cluster network
-  # uses DK2 at the same coordinates. Existing CSVs keep their original names.
-  existing_capacity_node_map:
-    "DK1 0AC": "DK2 0AC"
   district_heating:
     potential:
       DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
@@ -73,6 +69,7 @@ sector:
   #For residential heat, we can enable dsm = true when doing 2035.
   household_heat_allocation:
     enable: true
+    remove_unbuilt_auxiliaries: true
   
   
   bev_dsm: false #Almost negiligible effect on 2025. Can be set to true for 2035.
@@ -144,3 +141,15 @@ costs:
 clustering:
   temporal:
     resolution_sector: 1h  
+
+solving:
+  model_kwargs:
+    solver_dir: "/scratch"
+  solver:
+    name: gurobi
+    options: gurobi-default
+  solver_options:
+    gurobi-default:
+      threads: 8
+  mem_mb: 60000
+  runtime: 12h

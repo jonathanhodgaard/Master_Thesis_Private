@@ -80,7 +80,7 @@ sector:
   overdimension_heat_generators: #no oversizing, since we have the actual heat capacity
     decentral: 1.0 
   chp:
-    enable: true
+    enable: true  
     fuel:
     - gas
     - solid biomass
