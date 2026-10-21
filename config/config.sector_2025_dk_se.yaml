@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_dk_se_1h_2025_EV_country_shares" # use this to keep track of runs with different settings
+  name: "sector_dk_se_1h_2025_Springer_2" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -57,6 +57,10 @@ foresight: overnight   # top-level key, not under scenario — sector-coupled ru
 #foresight: myopic
 
 sector:
+  household_heat_allocation: #Force rural heating shares
+    enable: true
+    remove_unbuilt_auxiliaries: true
+
   district_heating:
     potential:
       DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
