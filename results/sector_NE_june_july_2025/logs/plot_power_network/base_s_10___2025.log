@@ -1,0 +1,29 @@
+INFO:pypsa.network.io:New version 1.4.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+WARNING:__main__:municipal solid waste transport not in config/plotting/tech_colors
+WARNING:__main__:waste boiler not in config/plotting/tech_colors
+INFO:__main__:Dropping non-buses ['EU', 'EU gas']
+ERROR:root:Uncaught exception
+Traceback (most recent call last):
+  File "/work/users/s203684/projects/Master_Thesis_Private/.snakemake/scripts/tmp22u46neh.plot_power_network.py", line 266, in <module>
+    plot_map(n)
+  File "/work/users/s203684/projects/Master_Thesis_Private/scripts/_helpers.py", line 495, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s203684/projects/Master_Thesis_Private/.snakemake/scripts/tmp22u46neh.plot_power_network.py", line 170, in plot_map
+    n.plot(
+  File "/work/users/s203684/projects/Master_Thesis_Private/.conda-env/lib/python3.12/site-packages/pypsa/plot/accessor.py", line 32, in __call__
+    return plot(self._n, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s203684/projects/Master_Thesis_Private/.conda-env/lib/python3.12/site-packages/pypsa/common.py", line 548, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/work/users/s203684/projects/Master_Thesis_Private/.conda-env/lib/python3.12/site-packages/pypsa/plot/maps/static.py", line 1310, in plot
+    return plotter.draw_map(
+           ^^^^^^^^^^^^^^^^^
+  File "/work/users/s203684/projects/Master_Thesis_Private/.conda-env/lib/python3.12/site-packages/pypsa/common.py", line 548, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/work/users/s203684/projects/Master_Thesis_Private/.conda-env/lib/python3.12/site-packages/pypsa/plot/maps/static.py", line 1143, in draw_map
+    raise ValueError(msg)
+ValueError: Colors not defined for all elements in the second MultiIndex 

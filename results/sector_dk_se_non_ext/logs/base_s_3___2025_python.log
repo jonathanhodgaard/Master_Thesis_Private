@@ -1,0 +1,41 @@
+INFO:pypsa.network.io:New version 1.3.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+INFO:__main__:No expandable lines found. Skipping iterative solving.
+INFO:__main__:Using single-pass optimization...
+INFO:__main__:Creating optimization model...
+WARNING:pypsa.network.power_flow:Line(s) ['0'] have a 'type' set; the manually provided values for r, x, b are overridden by the standard type. Set 'type' to "" to keep manual values.
+WARNING:pypsa.consistency:The following buses have no attached components, which can break the lopf: {'EU'}
+INFO:__main__:Adding extra functionality (custom constraints)...
+INFO:__main__:Solving model...
+INFO:linopy.model: Solve problem using Gurobi solver
+INFO:linopy.model:Solver logs written to `results/sector_dk_se_non_ext/logs/base_s_3___2025_solver.log`.
+INFO:linopy.model:Solver options:
+ - threads: 32
+ - method: 2
+ - crossover: 0
+ - BarConvTol: 1e-05
+ - Seed: 123
+ - AggFill: 0
+ - PreDual: 0
+ - GURO_PAR_BARDENSETHRESH: 200
+ - IISMethod: 1
+INFO:linopy.io:Writing objective.
+INFO:linopy.io: Writing time: 1.01s
+WARNING:linopy.constants:Optimization potentially failed: 
+Status: warning
+Termination condition: other
+Solution: 0 primals, 0 duals
+Objective: nan
+Solver: gurobi
+Runtime: 38.15s
+Dual bound: -inf
+Solver model: available
+Solver message: 12
+
+INFO:__main__:Maximum memory usage: (1124.17578125, 1791303693.3783286)
+WARNING:__main__:Solving status 'warning' with termination condition 'other'
+ERROR:root:Uncaught exception
+Traceback (most recent call last):
+  File "C:\Users\frede\Master_Thesis_Private\.snakemake\scripts\tmpwv7q6pfu.solve_network.py", line 1614, in <module>
+    raise RuntimeError("Solving status 'warning'. Discarding solution.")
+RuntimeError: Solving status 'warning'. Discarding solution.

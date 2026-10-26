@@ -1,0 +1,5 @@
+INFO:pypsa.network.io:New version 1.4.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+INFO:__main__:Found 0 buses matching pattern 'None'
+INFO:__main__:Successfully processed 0 buses with carrier data
+WARNING:__main__:No buses found matching the pattern None. Exiting.

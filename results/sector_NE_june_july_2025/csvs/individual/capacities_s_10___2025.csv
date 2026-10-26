@@ -1,0 +1,120 @@
+component,carrier,0
+Generator,biogas,0.0
+Generator,coal,6010419.87188
+Generator,gas,1054538.94573
+Generator,lignite,0.08066
+Generator,municipal solid waste,0.0
+Generator,nuclear,18855.0
+Generator,offwind-ac,43776.24304
+Generator,offwind-dc,0.0
+Generator,offwind-float,0.0
+Generator,oil primary,667418.99802
+Generator,onwind,129880.2739
+Generator,ror,12877.35271
+Generator,solar,74862.61225
+Generator,solar rooftop,38368.56759
+Generator,solar-hsat,0.0
+Generator,solid biomass,0.0
+Generator,unsustainable biogas,133747153.0
+Generator,unsustainable bioliquids,80765477.0
+Generator,unsustainable solid biomass,458426081.0
+Generator,urban central heat vent,13264.37219
+Generator,urban central solar thermal,1104.31834
+Generator,urban decentral heat vent,0.12813
+Generator,urban decentral solar thermal,0.02514
+Line,AC,50049.35447
+Link,BEV charger,67820.49919
+Link,CCGT,147284.9971
+Link,CO2 pipeline,0.53696
+Link,DC,29040.0
+Link,Fischer-Tropsch,0.08989
+Link,H2 Electrolysis,0.13812
+Link,HVC to air,1019825.63548
+Link,OCGT,15095.45797
+Link,SMR,4491.07755
+Link,Sabatier,0.18049
+Link,agriculture machinery oil,1664.63914
+Link,biogas to gas,15268.00804
+Link,biomass,43241.97329
+Link,biomass to liquid,0.21022
+Link,co2 sequestered,inf
+Link,coal,72924.71022
+Link,coal for industry,14188.9863
+Link,electricity distribution grid,384972.23937
+Link,gas for industry,36932.60657
+Link,gas for industry CC,0.11475
+Link,gas pipeline,67830.0
+Link,gas pipeline new,4089.33706
+Link,home battery charger,3.20984
+Link,home battery discharger,3.2846
+Link,household heat delivery,2514179.18694
+Link,industry methanol,336.75799
+Link,kerosene for aviation,38793.89967
+Link,land transport oil,282909.26954
+Link,lignite,59415.42836
+Link,methanolisation,383.28951
+Link,municipal solid waste,0.00017
+Link,municipal solid waste transport,2000000.0
+Link,naphtha for industry,36761.41553
+Link,oil,31345.82977
+Link,oil refining,1000000.0
+Link,process emissions,4979.28419
+Link,process emissions CC,92.66665
+Link,rural air heat pump,8898.71105
+Link,rural biomass boiler,905.44605
+Link,rural gas boiler,31776.28277
+Link,rural oil boiler,59397.18424
+Link,rural resistive heater,4903.68561
+Link,rural water tanks charger,64554.0868
+Link,rural water tanks discharger,64554.0868
+Link,shipping oil,26437.48219
+Link,solid biomass for industry,19408.56134
+Link,solid biomass for industry CC,0.20324
+Link,solid biomass import,0.23549
+Link,solid biomass transport,2000000.0
+Link,unsustainable bioliquids,80765477.0
+Link,urban central air heat pump,6133.93939
+Link,urban central biomass boiler,2437.15709
+Link,urban central coal CHP,39153.61703
+Link,urban central coal CHP CC,0.28047
+Link,urban central gas CHP,4104.61681
+Link,urban central gas CHP CC,0.1806
+Link,urban central gas boiler,19503.67692
+Link,urban central oil CHP,183.18845
+Link,urban central oil CHP CC,0.14577
+Link,urban central oil boiler,3545.05777
+Link,urban central resistive heater,18553.98657
+Link,urban central solid biomass CHP,18133.05539
+Link,urban central solid biomass CHP CC,0.1167
+Link,urban central waste boiler,120.65352
+Link,urban central water pits charger,17719.36193
+Link,urban central water pits discharger,17719.36193
+Link,urban central water tanks charger,486.49721
+Link,urban central water tanks discharger,486.49721
+Link,urban decentral air heat pump,11359.40524
+Link,urban decentral biomass boiler,2930.37735
+Link,urban decentral gas boiler,105414.83357
+Link,urban decentral oil boiler,301822.93833
+Link,urban decentral resistive heater,5320.37622
+Link,urban decentral water tanks charger,181625.63251
+Link,urban decentral water tanks discharger,181625.63251
+Link,waste CHP,1892.29984
+StorageUnit,PHS,8428.42
+StorageUnit,hydro,45756.23047
+Store,H2 Store,1.95236
+Store,biomass,128656301728.86942
+Store,co2,inf
+Store,co2 sequestered,597751468.78784
+Store,co2 stored,127.92011
+Store,coal,7128708027.93773
+Store,gas,701122756.19251
+Store,home battery,5.13328
+Store,lignite,7711818799.20388
+Store,methanol,562.90186
+Store,non-sequestered HVC,292080563.98289
+Store,oil,1529205080.94248
+Store,rural water tanks,9683.11302
+Store,solid biomass import,1390000000.0
+Store,urban central water pits,2657904.28906
+Store,urban central water tanks,29357.57686
+Store,urban decentral water tanks,27243.84488

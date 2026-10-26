@@ -1,0 +1,3 @@
+INFO:pypsa.network.io:New version 1.4.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+WARNING:scripts.add_electricity:tech_colors for carriers ['', 'none', 'urban central waste boiler', 'municipal solid waste transport', 'household heat delivery'] not defined in config.

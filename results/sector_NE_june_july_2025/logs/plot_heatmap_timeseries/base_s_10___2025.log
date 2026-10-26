@@ -1,0 +1,24 @@
+INFO:pypsa.network.io:New version 1.4.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+INFO:__main__:Plotting utilisation rate heatmap time series for OCGT
+INFO:__main__:Plotting utilisation rate heatmap time series for PHS
+INFO:__main__:Plotting utilisation rate heatmap time series for hydro
+INFO:__main__:Plotting utilisation rate heatmap time series for methanolisation
+INFO:__main__:Plotting utilisation rate heatmap time series for offwind-ac
+INFO:__main__:Plotting utilisation rate heatmap time series for onwind
+INFO:__main__:Plotting utilisation rate heatmap time series for ror
+INFO:__main__:Plotting utilisation rate heatmap time series for rural gas boiler
+INFO:__main__:Plotting utilisation rate heatmap time series for urban central air heat pump
+INFO:__main__:Plotting utilisation rate heatmap time series for urban central solid biomass CHP
+INFO:__main__:Plotting marginal prices heatmap time series for AC
+INFO:__main__:Plotting marginal prices heatmap time series for H2
+INFO:__main__:Plotting marginal prices heatmap time series for co2 stored
+INFO:__main__:Plotting marginal prices heatmap time series for gas
+INFO:__main__:Plotting marginal prices heatmap time series for methanol
+INFO:__main__:Plotting marginal prices heatmap time series for oil
+INFO:__main__:Plotting marginal prices heatmap time series for urban central heat
+INFO:__main__:Plotting SOC heatmap time series for co2 stored
+INFO:__main__:Plotting SOC heatmap time series for gas
+INFO:__main__:Plotting SOC heatmap time series for methanol
+INFO:__main__:Plotting SOC heatmap time series for oil
+INFO:__main__:Plotting SOC heatmap time series for urban central water tanks

@@ -1,0 +1,14 @@
+INFO:__main__:Loaded COP profiles with dimensions: FrozenMappingWarningOnValuesAccess({'heat_system': 3, 'heat_source': 1, 'time': 8760, 'name': 10})
+INFO:__main__:Processing heat system: urban central
+INFO:__main__:Converting Dataset to DataArray using variable: temperature
+INFO:__main__:Selected 'urban central' heat system
+INFO:__main__:Found 10 regions: ['DE2 0AC', 'DK0 0AC', 'DK2 0AC', 'FI0 0AC', 'GB1 0AC']...
+INFO:__main__:Processing heat system: urban decentral
+INFO:__main__:Converting Dataset to DataArray using variable: temperature
+INFO:__main__:Selected 'urban decentral' heat system
+INFO:__main__:Found 10 regions: ['DE2 0AC', 'DK0 0AC', 'DK2 0AC', 'FI0 0AC', 'GB1 0AC']...
+INFO:__main__:Processing heat system: rural
+INFO:__main__:Converting Dataset to DataArray using variable: temperature
+INFO:__main__:Selected 'rural' heat system
+INFO:__main__:Found 10 regions: ['DE2 0AC', 'DK0 0AC', 'DK2 0AC', 'FI0 0AC', 'GB1 0AC']...
+INFO:__main__:Interactive COP profile plots saved to results/sector_NE_june_july_2025/graphs/cop_profiles_s_10_2025.html
