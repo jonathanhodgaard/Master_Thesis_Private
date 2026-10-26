@@ -135,7 +135,7 @@ costs:
   year: 2025
   emission_prices: #Undersøg også "dynamic" funktionen
     enable: true
-    co2: 83.6 #Average of 2025 across the selected countries
+    co2: 100.51 #Average of 2025 across the selected countries
     #https://taxfoundation.org/data/all/eu/carbon-taxes-europe/
 
 clustering:
