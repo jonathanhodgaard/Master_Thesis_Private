@@ -11,67 +11,6 @@ remaining demand (services/agriculture) is assigned to the gas group. This is an
 explicit modelling assumption. Gas boilers retain their upstream extension flags.
 Shares describe useful-heat demand, not household counts.
 
-WORKFLOW INTEGRATION (these edits are intentionally not applied automatically):
-
-1. Enable sector.household_heat_allocation BEFORE building the network and set
-   sector.residential_heat.dsm.enable: false. Both cluster_heat_buses settings work.
-   With clustering, rebuild the prepared network: cluster_heat_buses() must retain
-   residential Load names. Old merged files do not contain that decomposition.
-2. Import the three functions below in scripts/solve_network.py.
-3. After prepare_network(), but BEFORE create_model(), call:
-       prepare_household_heat_network(n, snakemake.config)
-4. Inside extra_functionality(), call:
-       add_household_heat_constraints(n, snapshots)
-5. After a successful solve, BEFORE export_to_netcdf(), call:
-       save_household_heat_shares(n, snakemake.output.household_heat_shares)
-   Declare household_heat_shares as a CSV output in the Snakemake solve rule.
-6. IMPORTANT: solve_network.py currently replaces n.meta before export.
-   Replace that assignment with a merge so household group definitions survive:
-       n.meta = {**n.meta, **snakemake.config,
-                 "wildcards": dict(snakemake.wildcards)}
-
-Minimal additional config:
-    sector:
-      household_heat_allocation:
-        enable: true
-        # Optional: restrict to selected bus names; default covers all countries.
-        # heat_buses: ['DK0 0AC residential rural heat']
-        # Optional: remove ONLY unbuilt solar collectors/heat vents on these buses.
-        # Without this opt-in, unsupported equipment raises an error.
-        remove_unbuilt_auxiliaries: false
-
-Tank, charger and discharger capacities are co-optimised using template investment
-costs and capacity bounds. The existing cost-data energy/power ratio determines
-E_nom = ratio * charger_p_nom, and charger_p_nom = efficiency * discharger_p_nom.
-These match the repository's TES sizing constraints. There is no capacity equality
-to share * household demand peak. PyPSA retains losses, efficiencies and flexible
-dispatch. Neither storage_hours nor tank_power_per_peak is used.
-
-The script rewires primary heater buses without changing p_nom, p_nom_min,
-p_nom_max or p_nom_extendable. Fixed existing equipment stays fixed; extendable
-equipment keeps its minimum. Where existing equipment is present, household
-shares are FIXED to its thermal-capacity fractions. For fixed Links existing
-capacity is p_nom; for extendable Links it is p_nom_min (not a starting guess).
-This assumes comparable household equipment sizing across technologies and a
-complete existing residential heating mix at that bus. Technologies without existing capacity
-receive zero share there. Buses with no existing capacity optimise their shares.
-An extendable existing heater can still expand for its FIXED household group;
-change p_nom_extendable upstream if all Danish heating capacity must stay fixed.
-
-DISPATCH / CONTINGENCIES:
-Load ONE exported base network and call freeze_household_heat_network(n, shares_csv), then
-build its optimisation model and call add_household_heat_constraints(n, snapshots).
-Shares and installed capacities are fixed; use existing PyPSA storage constraints.
-Solved shares are written to/read from CSV, not saved in the base network metadata.
-For short event windows initialise tank energy from the reference dispatch and
-set e_cyclic=False BEFORE creating the model. Do not recreate empty tanks.
-
-This module does not implement backup equipment, solar-assisted household groups,
-building DSM, multi-investment periods or rolling-horizon allocation. It rejects
-unallocated devices instead of silently allowing them to bypass household shares.
-It requires all allocated demand to be served. To quantify unmet heat during
-contingencies, add heat-shedding equipment to EACH household group bus, not the
-original aggregate demand bus. The latter cannot bypass fixed group deliveries.
 """
 
 from pathlib import Path
