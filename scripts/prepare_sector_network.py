@@ -49,17 +49,16 @@ from scripts.prepare_network import maybe_adjust_costs_and_potentials
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
 
-# EV share of passenger car driving per country and investment year.
-# PLACEHOLDER VALUES - replace with sourced data.
+# EV share of passenger car driving per country and investment year. (pypsa-eur does not split passneger/heavy duty so this is assumption)
 # Every country in the network must be listed for every year you solve.
 LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY = {
-    "NL": {2025: 0.06, 2035: 0.13},
-    "DE": {2025: 0.04, 2035: 0.06},
-    "DK": {2025: 0.25, 2035: 0.23}, #https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer
-    "SE": {2025: 0.10, 2035: 0.16},
-    "NO": {2025: 0.30, 2035: 0.36},
-    "FI": {2025: 0.04, 2035: 0.12},
-    "GB": {2025: 0.05, 2035: 0.07},
+    "NL": {2025: 0.06, 2035: 0.37},
+    "DE": {2025: 0.04, 2035: 0.35},
+    "DK": {2025: 0.25, 2035: 0.56}, #https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer
+    "SE": {2025: 0.10, 2035: 0.41}, #For 2035 we add 31% to the 2025 number, since the projected 2035 % is 36%, and the 2025 europe % is 5%.
+    "NO": {2025: 0.30, 2035: 0.61}, #So assumption of absoulte percentage point increase for europe for all countries
+    "FI": {2025: 0.04, 2035: 0.35},
+    "GB": {2025: 0.05, 2035: 0.36},
 }
 
 def define_spatial(nodes, options):
