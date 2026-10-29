@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_NE_june_july_2025" # use this to keep track of runs with different settings
+  name: "base_2025_sector_june_july_2013_2014" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -22,8 +22,8 @@ scenario:
 countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
 
 snapshots:
-  start: "2013-01-01"
-  end: "2014-01-01"
+  start: "2013-07-01"
+  end: "2014-07-01"
   inclusive: left
 
 co2_budget: null #no co2 budget, only a co2 price for this run
@@ -40,20 +40,18 @@ electricity:
   estimate_battery_capacities: true
   transmission_limit: v1.0 #cannot expand transmission capacity
 
+
 atlite:
+  default_cutout: europe-2011-2016-era5
   cutouts:
-    "europe-2013-sarah3-era5":
+    "europe-2011-2016-era5":
       module: era5
-      x: [-12., 32.0]
-      y: [47.0, 72.0] 
-      time: ["2013-01-01", "2013-12-31"]
-
-#conventional: dynamic_fuel_price?
+      x: [-12.0, 35.0]
+      y: [33.0, 72.0]
+      time: ["2011-01-01", "2016-12-31"]
 
 
-
-foresight: overnight   # top-level key, not under scenario — sector-coupled runs need this set
-#foresight: myopic
+foresight: overnight   
 
 sector:
   district_heating:
@@ -150,3 +148,9 @@ solving:
       threads: 8
   mem_mb: 60000
   runtime: 12h
+
+
+data:
+  cutout:
+    source: archive
+    version: v1.0
