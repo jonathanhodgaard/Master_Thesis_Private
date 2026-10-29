@@ -1,0 +1,138 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+#tutorial: true
+
+
+run:
+  name: "sector_2035" # use this to keep track of runs with different settings
+  disable_progressbar: true
+
+
+
+scenario:
+  clusters:
+  - 10 # Minimum for the selected countries and disconnected AC subnetworks.
+  planning_horizons:
+  - 2035 # setting horizon to 2035
+
+
+
+countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
+
+snapshots:
+  start: "2013-01-01"
+  end: "2014-01-01"
+  inclusive: left
+
+#co2_budget is included in default, and goes to 2035?
+
+electricity:
+  estimate_battery_capacities: true
+  transmission_limit: v1.0
+
+atlite:
+  cutouts:
+    "europe-2013-sarah3-era5":
+      module: era5
+      x: [-12., 32.0]
+      y: [47.0, 72.0] 
+      time: ["2013-01-01", "2013-12-31"] #change to include winters
+
+foresight: overnight
+
+
+sector:
+  district_heating:
+    potential:
+      DK:    0.752 #This number results in disctrict heating share of 70% (urban) central heating in Denmark. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
+                   #0.7/0.93= 0.752. 0.93 is the share of people living in urban areas in Denmark according to pypsa-eur workflow.
+      default: 0.24 #This results in the default value of 2035
+    progress:
+        2035: 1.0
+
+  heat_pump_sources:
+    rural:
+    - air
+    - ground
+
+  household_heat_allocation: #added ourselves
+    enable: true
+    remove_unbuilt_auxiliaries: true
+  
+  
+  bev_dsm: true #Almost negiligible effect on 2025. Can be set to true for 2035.
+  v2g: true #turn on by 2035? https://ens.dk/media/8525/download 
+  # There is now an option to make special land_transport_electric_share specific for Denmark (hardocoded in prepare_sector_network)
+  overdimension_heat_generators: #no oversizing, since we have the actual heat capacity and every heat technology is extendable
+    decentral: 1.0 
+  chp:
+    enable: true
+    fuel:
+    - gas
+    - solid biomass
+    - coal #Added ourselves in codebase
+    - oil #Added ourselves in codebase
+  dac: false
+  hydrogen_fuel_cell: true
+  hydrogen_turbine: true 
+  SMR_cc: false
+  oil_boilers: true
+
+
+  hydrogen_underground_storage: false  
+  methanol:
+    methanol_to_power:
+      ccgt: false
+      ccgt_cc: false
+      ocgt: false
+      allam: false
+    biomass_to_methanol: true
+
+  ammonia: true
+
+  H2_network: false
+
+  biomass_transport: true
+  biogas_upgrading_cc: true #https://app.powerbi.com/view?r=eyJrIjoiMzhmNzZmZGMtYjUyYS00YzExLWEwNzYtZWRiMzY4NWI0NDYzIiwidCI6ImEzYjVlZTgyLTZiMDctNGQ3My1iNzdjLWJmNDgwZDA3MTBiZiIsImMiOjl9
+
+  conventional_generation:
+    OCGT: gas
+    CCGT: gas
+    coal: coal
+    lignite: lignite
+    oil: oil
+    biomass: biomass 
+
+  electrobiofuels: false
+  municipal_solid_waste: true
+  solid_biomass_import:
+    enable: true
+
+
+# docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
+industry:
+  waste_to_energy: true
+  waste_to_energy_cc: true #https://app.powerbi.com/view?r=eyJrIjoiMzhmNzZmZGMtYjUyYS00YzExLWEwNzYtZWRiMzY4NWI0NDYzIiwidCI6ImEzYjVlZTgyLTZiMDctNGQ3My1iNzdjLWJmNDgwZDA3MTBiZiIsImMiOjl9
+
+
+costs:
+  year: 2035 
+  #no emission price, since we have co2 budget and will wind co2 price from this.
+
+clustering:
+  temporal:
+    resolution_sector: 1h  
+
+solving:
+  model_kwargs:
+    solver_dir: "/scratch"
+  solver:
+    name: gurobi
+    options: gurobi-default
+  solver_options:
+    gurobi-default:
+      threads: 8
+  mem_mb: 60000
+  runtime: 12h
