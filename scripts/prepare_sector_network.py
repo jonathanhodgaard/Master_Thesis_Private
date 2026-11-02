@@ -49,18 +49,6 @@ from scripts.prepare_network import maybe_adjust_costs_and_potentials
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
 
-# EV share of passenger car driving per country and investment year. (pypsa-eur does not split passneger/heavy duty so this is assumption)
-# Every country in the network must be listed for every year you solve.
-LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY = {
-    "NL": {2025: 0.06, 2035: 0.37},
-    "DE": {2025: 0.04, 2035: 0.35},
-    "DK": {2025: 0.25, 2035: 0.56}, #https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer
-    "SE": {2025: 0.10, 2035: 0.41}, #For 2035 we add 31% to the 2025 number, since the projected 2035 % is 36%, and the 2025 europe % is 5%.
-    "NO": {2025: 0.30, 2035: 0.61}, #So assumption of absoulte percentage point increase for europe for all countries
-    "FI": {2025: 0.04, 2035: 0.35},
-    "GB": {2025: 0.05, 2035: 0.36},
-}
-
 def define_spatial(nodes, options):
     """
     Namespace for spatial.
@@ -2727,8 +2715,9 @@ def add_land_transport(
     options : dict
         Dictionary containing configuration options, specifically:
         - land_transport_fuel_cell_share
-        - land_transport_electric_share
-        - land_transport_ice_share
+        - land_transport_electric_share_by_country (falls back to
+          land_transport_electric_share for missing countries/years)
+        land_transport_ice_share is not used: ICE is 1 - electric - fuel cell.
     spatial : SimpleNamespace
         Configuration options containing at least spatial information on nodes, h2 and oil
     investment_year : int
@@ -2771,33 +2760,26 @@ def add_land_transport(
     #p_set = transport[nodes]
 
 
-    # exogenous share of passenger car type, per node
+    # Exogenous electric share per country. It applies to ALL land transport:
+    # pypsa-eur lumps road (cars, trucks, buses) and non-electric rail into one
+    # demand, so car-based shares (IEA) probably overstate electrification.
+    # Sources and assumptions: see sector.land_transport_electric_share_by_country
+    # in the config.
     nodes = pd.Index(nodes)
     node_country = nodes.str[:2]  # "DK1 0" -> "DK"
 
-    # Stop if a country is missing from the table
-    missing_ct = set(node_country) - set(LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY)
-    if missing_ct:
-        raise ValueError(f"No EV share defined for countries: {sorted(missing_ct)}")
-
-    # Stop if a country has no value for the year being solved
-    missing_year = [
-        ct
-        for ct in set(node_country)
-        if investment_year not in LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY[ct]
-    ]
-    if missing_year:
-        raise ValueError(
-            f"No EV share for year {investment_year} in countries: {sorted(missing_year)}"
-        )
-
-    # One EV share per country for this year, e.g. DK -> 0.20
-    ct_electric = pd.Series(
-        {
-            ct: LAND_TRANSPORT_ELECTRIC_SHARE_BY_COUNTRY[ct][investment_year]
-            for ct in set(node_country)
-        }
-    )
+    share_by_country = options.get("land_transport_electric_share_by_country", {})
+    ct_electric = pd.Series(dtype=float)
+    for ct in sorted(set(node_country)):
+        if investment_year in share_by_country.get(ct, {}):
+            ct_electric[ct] = share_by_country[ct][investment_year]
+        else:
+            ct_electric[ct] = get(options["land_transport_electric_share"], investment_year)
+            logger.warning(
+                f"No EV share for {ct} in {investment_year} in "
+                "land_transport_electric_share_by_country; using "
+                f"land_transport_electric_share = {ct_electric[ct]}."
+            )
 
     # Table with one row per node and one column per car type
     shares = pd.DataFrame(index=nodes)
@@ -7287,59 +7269,80 @@ if __name__ == "__main__":
     dk_nodes = danish_zone_nodes(n)
     existing_node_map.update(dk_nodes)
     
-    if options["heating"]:
-        apply_existing_chp_and_heat_capacities(
-            n, snakemake.input.existing_chp_heat_capacities, node_map=existing_node_map
+    # existing capacities from data/existing_infrastructure, only in chosen years
+    # (set in the run config; if missing, apply in every year and keep extendable)
+    existing = {
+        "apply_in_years": None,
+        "keep_extendable": True,
+        **options.get("existing_infrastructure", {}),
+    }
+    if existing["apply_in_years"] is None or investment_year in existing["apply_in_years"]:
+        existing_kwargs = dict(
+            keep_extendable=existing["keep_extendable"], node_map=existing_node_map
         )
-        apply_existing_rural_decentral_heat_capacities(
-            n, snakemake.input.existing_rural_decentral_heat_capacities, node_map=existing_node_map
-        )
-    if options["electricity_distribution_grid"]:
-        apply_existing_solar_rooftop_capacities(
-            n, snakemake.input.existing_solar_rooftop_capacities, node_map=existing_node_map
+        if options["heating"]:
+            apply_existing_chp_and_heat_capacities(
+                n, snakemake.input.existing_chp_heat_capacities, **existing_kwargs
+            )
+            apply_existing_rural_decentral_heat_capacities(
+                n, snakemake.input.existing_rural_decentral_heat_capacities, **existing_kwargs
+            )
+        if options["electricity_distribution_grid"]:
+            apply_existing_solar_rooftop_capacities(
+                n, snakemake.input.existing_solar_rooftop_capacities, **existing_kwargs
+            )
+    else:
+        logger.info(
+            f"Not applying existing capacities in {investment_year} "
+            f"(sector.existing_infrastructure.apply_in_years = {existing['apply_in_years']})."
         )
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 
-    if investment_year == 2025:
+    # fixing of existing capacities (set in the run config; if missing, nothing is fixed)
+    fix_cfg = {
+        "enable": False,
+        "countries": [],
+        "years": [],
+        "keep_extendable_carriers": None,
+        "block_new_carriers": [],
+        "block_new_carrier_suffixes": [],
+        "pit_storage_MWh": {},
+        **options.get("fix_existing_capacity", {}),
+    }
+    if fix_cfg["enable"] and investment_year in fix_cfg["years"]:
         for df in [n.links, n.generators]:
-            # decentral gas boilers stay extendable to cover services and
+            in_countries = df.index.str[:2].isin(fix_cfg["countries"])
+            # e.g. decentral gas boilers stay extendable to cover services and
             # agriculture heat not in the existing-capacity data
-            keep_extendable = df.carrier.str.contains("(rural|urban decentral) gas boiler")
+            keep_extendable = (
+                df.carrier.str.contains(fix_cfg["keep_extendable_carriers"])
+                if fix_cfg["keep_extendable_carriers"]
+                else pd.Series(False, index=df.index)
+            )
             fix = (
-                df.index.str.startswith("DK")
+                in_countries
                 & df.p_nom_extendable
                 & (df.p_nom_min > 0)
                 & ~keep_extendable
             )
             df.loc[fix, "p_nom_extendable"] = False
             logger.info(
-                f"Fixed {fix.sum()} Danish components: {sorted(df.loc[fix, 'carrier'].unique())}"
+                f"Fixed {fix.sum()} components in {fix_cfg['countries']}: {sorted(df.loc[fix, 'carrier'].unique())}"
             )
-            #These carriers are getting built because 
-            # they have no existing capacity and therefore no p_nom_min > 0, but we don't want them to be built in 2025.
-            no_new = df.index.str.startswith("DK") & (
-                df.carrier.isin([
-                    "urban central coal CHP",
-                    "urban central oil CHP",
-                    "coal",
-                    "lignite",
-                    "CCGT",
-                    "OCGT",
-                ])
-                | df.carrier.str.endswith(" CC")
+            # These carriers have no existing capacity and therefore no
+            # p_nom_min > 0, so they would otherwise get built.
+            no_new = in_countries & (
+                df.carrier.isin(fix_cfg["block_new_carriers"])
+                | df.carrier.str.endswith(tuple(fix_cfg["block_new_carrier_suffixes"]))
             )
             df.loc[no_new, "p_nom_extendable"] = False
             df.loc[no_new, "p_nom"] = df.loc[no_new, "p_nom_min"]
             logger.info(
-                f"Blocked new Danish capacity for: {sorted(df.loc[no_new, 'carrier'].unique())}"
+                f"Blocked new capacity in {fix_cfg['countries']} for: {sorted(df.loc[no_new, 'carrier'].unique())}"
             )
-        # fix Danish pit thermal storage at existing capacity (MWh); 0 = no pits
-        existing_pits_MWh = {
-            "DK2": 45_000,  # Eastern Denmark
-            "DK1": 55_000,  # Western Denmark
-        }
+        # fix pit thermal storage at existing capacity (MWh); 0 = no pits
         apply_existing_pit_capacities(
-            n, existing_pits_MWh, node_map=existing_node_map
+            n, fix_cfg["pit_storage_MWh"], node_map=existing_node_map
         )
 
     sanitize_carriers(n, snakemake.config)

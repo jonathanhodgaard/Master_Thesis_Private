@@ -1,0 +1,38 @@
+INFO:pypsa.network.io:New version 1.4.0 available! (Current: 1.2.4)
+INFO:pypsa.network.io:Imported network 'Unnamed Network' has buses, carriers, generators, global_constraints, lines, links, loads, storage_units, stores, sub_networks
+INFO:__main__:No expandable lines found. Skipping iterative solving.
+INFO:__main__:Using single-pass optimization...
+INFO:__main__:Creating optimization model...
+WARNING:pypsa.network.power_flow:Line(s) ['0'] have a 'type' set; the manually provided values for r, x, b are overridden by the standard type. Set 'type' to "" to keep manual values.
+WARNING:pypsa.consistency:The following buses have no attached components, which can break the lopf: {'EU'}
+INFO:__main__:Adding extra functionality (custom constraints)...
+INFO:__main__:Solving model...
+INFO:linopy.model: Solve problem using Gurobi solver
+INFO:linopy.model:Solver logs written to `results/sector_nov_test/logs/base_s_3___2025_solver.log`.
+INFO:linopy.model:Solver options:
+ - threads: 8
+ - method: 2
+ - crossover: 0
+ - BarConvTol: 1e-05
+ - Seed: 123
+ - AggFill: 0
+ - PreDual: 0
+ - GURO_PAR_BARDENSETHRESH: 200
+ - IISMethod: 1
+INFO:linopy.io:Writing objective.
+INFO:linopy.io: Writing time: 1.32s
+INFO:linopy.constants: Optimization successful: 
+Status: ok
+Termination condition: optimal
+Solution: 83096 primals, 185784 duals
+Objective: 5.17e+08
+Solver: gurobi
+Runtime: 9.05s
+Dual bound: -inf
+Solver model: available
+Solver message: 2
+
+INFO:pypsa.optimization.optimize:The variable 'Household-heat-share' could not be mapped to the network component because the component 'Household' does not exist.
+INFO:pypsa.optimization.optimize:The shadow-prices of the constraints Generator-fix-p-lower, Generator-fix-p-upper, Generator-ext-p-lower, Generator-ext-p-upper, Line-fix-s-lower, Line-fix-s-upper, Link-fix-p-lower, Link-fix-p-upper, Link-ext-p-lower, Link-ext-p-upper, Store-fix-e-lower, Store-fix-e-upper, Store-ext-e-lower, Store-ext-e-upper, StorageUnit-fix-p_dispatch-lower, StorageUnit-fix-p_dispatch-upper, StorageUnit-fix-p_store-lower, StorageUnit-fix-p_store-upper, StorageUnit-fix-state_of_charge-lower, StorageUnit-fix-state_of_charge-upper, StorageUnit-energy_balance, Store-energy_balance, Line-loss_upper, Line-loss_tangents-1--1, Line-loss_tangents-1-1, Line-loss_tangents-2--1, Line-loss_tangents-2-1, TES_energy_to_power_ratio, TES_charger_ratio, Household-share-sum-0, Household-share-sum-1, Household-share-sum-2, Household-share-sum-3, Household-share-sum-4, Household-share-sum-5, Household-demand-0, Household-tank-energy-to-power-0, Household-tank-charger-ratio-0, Household-demand-1, Household-tank-energy-to-power-1, Household-tank-charger-ratio-1, Household-demand-2, Household-tank-energy-to-power-2, Household-tank-charger-ratio-2, Household-demand-3, Household-tank-energy-to-power-3, Household-tank-charger-ratio-3, Household-demand-4, Household-tank-energy-to-power-4, Household-tank-charger-ratio-4, Household-demand-5, Household-tank-energy-to-power-5, Household-tank-charger-ratio-5, Household-demand-6, Household-tank-energy-to-power-6, Household-tank-charger-ratio-6, Household-demand-7, Household-tank-energy-to-power-7, Household-tank-charger-ratio-7, Household-demand-8, Household-tank-energy-to-power-8, Household-tank-charger-ratio-8, Household-demand-9, Household-tank-energy-to-power-9, Household-tank-charger-ratio-9, Household-demand-10, Household-tank-energy-to-power-10, Household-tank-charger-ratio-10, Household-demand-11, Household-tank-energy-to-power-11, Household-tank-charger-ratio-11, Household-demand-12, Household-tank-energy-to-power-12, Household-tank-charger-ratio-12, Household-demand-13, Household-tank-energy-to-power-13, Household-tank-charger-ratio-13, Household-demand-14, Household-tank-energy-to-power-14, Household-tank-charger-ratio-14, Household-demand-15, Household-tank-energy-to-power-15, Household-tank-charger-ratio-15, Household-demand-16, Household-tank-energy-to-power-16, Household-tank-charger-ratio-16, Household-demand-17, Household-tank-energy-to-power-17, Household-tank-charger-ratio-17, Household-demand-18, Household-tank-energy-to-power-18, Household-tank-charger-ratio-18, Household-demand-19, Household-tank-energy-to-power-19, Household-tank-charger-ratio-19, Household-demand-20, Household-tank-energy-to-power-20, Household-tank-charger-ratio-20, Household-demand-21, Household-tank-energy-to-power-21, Household-tank-charger-ratio-21, Household-demand-22, Household-tank-energy-to-power-22, Household-tank-charger-ratio-22, Household-demand-23, Household-tank-energy-to-power-23, Household-tank-charger-ratio-23, Household-demand-24, Household-tank-energy-to-power-24, Household-tank-charger-ratio-24, Household-demand-25, Household-tank-energy-to-power-25, Household-tank-charger-ratio-25, Household-demand-26, Household-tank-energy-to-power-26, Household-tank-charger-ratio-26, Household-demand-27, Household-tank-energy-to-power-27, Household-tank-charger-ratio-27, Household-demand-28, Household-tank-energy-to-power-28, Household-tank-charger-ratio-28, Household-demand-29, Household-tank-energy-to-power-29, Household-tank-charger-ratio-29 were not assigned to the network.
+INFO:__main__:Maximum memory usage: (959.8046875, 1793348848.6174498)
+INFO:pypsa.network.io:Exported network 'Unnamed Network' saved to 'results/sector_nov_test/networks/base_s_3___2025.nc contains: links, storage_units, generators, carriers, buses, stores, sub_networks, global_constraints, lines, loads

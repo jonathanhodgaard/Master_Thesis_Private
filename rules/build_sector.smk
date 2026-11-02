@@ -1641,9 +1641,24 @@ rule prepare_sector_network:
         heat_dsm_profile=resources(
             "residential_heat_dsm_profile_total_base_s_{clusters}.csv"
         ),
-        existing_chp_heat_capacities="data/existing_infrastructure/existing_chp_heat_capacities.csv",
-        existing_rural_decentral_heat_capacities="data/existing_infrastructure/existing_rural_decentral_heat_capacities.csv",
-        existing_solar_rooftop_capacities="data/existing_infrastructure/existing_solar_rooftop_capacities.csv",
+        existing_chp_heat_capacities=config_provider(
+            "sector",
+            "existing_infrastructure",
+            "chp_heat_capacities",
+            default="data/existing_infrastructure/existing_chp_heat_capacities.csv",
+        ),
+        existing_rural_decentral_heat_capacities=config_provider(
+            "sector",
+            "existing_infrastructure",
+            "rural_decentral_heat_capacities",
+            default="data/existing_infrastructure/existing_rural_decentral_heat_capacities.csv",
+        ),
+        existing_solar_rooftop_capacities=config_provider(
+            "sector",
+            "existing_infrastructure",
+            "solar_rooftop_capacities",
+            default="data/existing_infrastructure/existing_solar_rooftop_capacities.csv",
+        ),
         co2_totals_name=resources("co2_totals.csv"),
         co2=rules.retrieve_ghg_emissions.output["csv"],
         biomass_potentials=resources(
