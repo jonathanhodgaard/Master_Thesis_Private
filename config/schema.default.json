@@ -4147,6 +4147,14 @@
     "SectorConfig": {
       "description": "Configuration for `sector` settings.",
       "properties": {
+        "capacity_overrides": {
+          "description": "Capacity floors and expansion settings applied during sector network preparation.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
         "transport": {
           "default": true,
           "description": "Flag to include transport sector.",
@@ -10639,6 +10647,14 @@
     "sector": {
       "description": "Configuration for `sector` settings.",
       "properties": {
+        "capacity_overrides": {
+          "description": "Capacity floors and expansion settings applied during sector network preparation.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
         "transport": {
           "default": true,
           "description": "Flag to include transport sector.",

@@ -43,11 +43,206 @@ from scripts.definitions.heat_system import HeatSystem
 from scripts.existing_capacity_nodes import (
     apply_existing_pit_capacities,
     map_existing_capacity_nodes,
+    resolve_capacity_node,
 )
 from scripts.prepare_network import maybe_adjust_costs_and_potentials
 
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
+
+
+def _capacity_override_geography(n, bus):
+    """Follow sector-bus locations to an AC node and its country."""
+    seen, country = set(), ""
+    while bus in n.buses.index and bus not in seen:
+        seen.add(bus)
+        row = n.buses.loc[bus]
+        value = row.get("country", "")
+        if pd.notna(value) and value:
+            country = country or value
+        if row.carrier == "AC":
+            return bus, country
+        bus = row.get("location", "")
+    return "", country
+
+
+def _allocate_capacity_override(baseline, maximum, target, distribution):
+    """Allocate only the shortfall, respecting each component's potential."""
+    allocated = baseline.copy()
+    shortfall = max(0.0, target - baseline.sum())
+    remaining = maximum - baseline
+    if shortfall > remaining.sum() + 1e-6:
+        raise ValueError("minimum exceeds available capacity potential")
+    while shortfall > 1e-6:
+        available = remaining > 1e-9
+        if not available.any():
+            raise ValueError("minimum cannot be allocated within capacity potential")
+        if distribution == "equal":
+            weights = available.astype(float)
+        elif distribution == "existing_then_potential" and baseline[available].sum() > 0:
+            weights = baseline.where(available, 0.0)
+        else:
+            weights = remaining.where(available, 0.0)
+            # An unlimited potential has no meaningful proportional weight.
+            if np.isinf(weights).any():
+                weights = np.isinf(weights).astype(float)
+        additions = (shortfall * weights / weights.sum()).clip(upper=remaining)
+        allocated += additions
+        remaining -= additions
+        shortfall = max(0.0, target - allocated.sum())
+    return allocated
+
+
+def apply_capacity_overrides(n, rules, investment_year, node_map=None):
+    """Set geographical capacity floors and expansion flags before optimisation.
+
+    A minimum is a total over the entire selection, not per component/country.
+    Existing nominal capacities and floors are preserved. Disabling expansion
+    freezes the resulting baseline. Rules are validated before any are applied;
+    overlapping active selections are rejected to avoid order-dependent results.
+    See doc/capacity-overrides.md for selectors, units and allocation semantics.
+    """
+    if not isinstance(rules, list):
+        raise ValueError("sector.capacity_overrides must be a list")
+    components = {
+        "Generator": ("generators", "p_nom", "minimum_mw"),
+        "Link": ("links", "p_nom", "minimum_mw"),
+        "StorageUnit": ("storage_units", "p_nom", "minimum_mw"),
+        "Store": ("stores", "e_nom", "minimum_mwh"),
+        "Line": ("lines", "s_nom", "minimum_mva"),
+        "Transformer": ("transformers", "s_nom", "minimum_mva"),
+    }
+    allowed = {
+        "name", "years", "component", "carrier", "countries", "nodes", "buses",
+        "names", "port", "capacity_basis", "minimum_mw", "minimum_mwh",
+        "minimum_mva", "extendable", "distribution",
+    }
+    assignments, claimed = [], set()
+    for number, rule in enumerate(rules, 1):
+        label = rule.get("name", f"rule {number}") if isinstance(rule, dict) else number
+        prefix = f"Capacity override {label!r}: "
+        try:
+            if not isinstance(rule, dict):
+                raise ValueError("expected a rule mapping")
+            if set(rule) - allowed:
+                raise ValueError(f"unknown settings: {sorted(set(rule) - allowed)}")
+            years = rule.get("years")
+            if years is not None:
+                if not isinstance(years, list) or any(type(y) is not int for y in years):
+                    raise ValueError("years must be a list of integer planning years")
+                if investment_year not in years:
+                    continue
+            component = rule.get("component")
+            if component not in components:
+                raise ValueError(f"component must be one of {list(components)}")
+            table, attr, unit = components[component]
+            df = getattr(n, table)
+            for key in ("countries", "nodes", "buses", "names"):
+                if key in rule and (
+                    not isinstance(rule[key], list) or not rule[key]
+                    or any(not isinstance(v, str) for v in rule[key])
+                ):
+                    raise ValueError(f"{key} must be a nonempty list of strings")
+            carrier = rule.get("carrier")
+            if carrier is not None and not isinstance(carrier, str):
+                raise ValueError("carrier must be an exact carrier string")
+            if carrier is None and "names" not in rule:
+                raise ValueError("specify carrier or explicit component names")
+            port = rule.get("port", "bus0" if component in {"Link", "Line", "Transformer"} else "bus")
+            if port not in df.columns or (port != "bus" and port not in {f"bus{i}" for i in range(5)}):
+                raise ValueError(f"invalid connection port {port!r}")
+            selected = pd.Series(True, index=df.index)
+            if carrier is not None:
+                selected &= df.carrier == carrier
+            if "names" in rule:
+                missing = set(rule["names"]) - set(df.index)
+                if missing:
+                    raise ValueError(f"unknown component names: {sorted(missing)}")
+                selected &= df.index.isin(rule["names"])
+            if "buses" in rule:
+                missing = set(rule["buses"]) - set(n.buses.index)
+                if missing:
+                    raise ValueError(f"unknown buses: {sorted(missing)}")
+                selected &= df[port].isin(rule["buses"])
+            geography = {b: _capacity_override_geography(n, b) for b in df.loc[selected, port].unique()}
+            if "nodes" in rule:
+                nodes = [resolve_capacity_node(n, node, node_map) for node in rule["nodes"]]
+                selected &= df[port].map(lambda b: geography.get(b, ("", ""))[0]).isin(nodes)
+            if "countries" in rule:
+                selected &= df[port].map(lambda b: geography.get(b, ("", ""))[1]).isin(rule["countries"])
+            idx = df.index[selected]
+            if idx.empty:
+                raise ValueError("selection matches no equipment; check technology and geography")
+            for key in ("countries", "nodes", "buses"):
+                if key not in rule:
+                    continue
+                actual = set(df.loc[idx, port])
+                if key == "countries":
+                    actual = {geography[b][1] for b in actual}
+                elif key == "nodes":
+                    actual = {geography[b][0] for b in actual}
+                expected = set(nodes if key == "nodes" else rule[key])
+                if expected - actual:
+                    raise ValueError(f"no matching equipment for {key}: {sorted(expected - actual)}")
+            if "names" in rule and set(rule["names"]) - set(idx):
+                raise ValueError("some explicit names do not match the other selectors")
+            keys = {(component, name) for name in idx}
+            if keys & claimed:
+                raise ValueError("selection overlaps another active rule; use disjoint selections")
+            claimed.update(keys)
+            numeric = {k for k in rule if k.startswith("minimum_")}
+            if numeric - {unit}:
+                raise ValueError(f"{component} capacity must use {unit}")
+            target = rule.get(unit)
+            if target is not None and (
+                isinstance(target, bool) or not isinstance(target, (int, float))
+                or not np.isfinite(target) or target < 0
+            ):
+                raise ValueError(f"{unit} must be a finite nonnegative number")
+            if unit in rule and target is None:
+                raise ValueError(f"{unit} cannot be null")
+            if "extendable" in rule and type(rule["extendable"]) is not bool:
+                raise ValueError("extendable must be true or false")
+            if target is None and "extendable" not in rule:
+                raise ValueError("specify a minimum capacity and/or extendable")
+            distribution = rule.get("distribution", "existing_then_potential")
+            if distribution not in {"existing_then_potential", "potential", "equal"}:
+                raise ValueError("distribution must be existing_then_potential, potential or equal")
+            basis = rule.get("capacity_basis", "native")
+            if basis not in {"native", "output"} or (basis == "output" and component != "Link"):
+                raise ValueError("capacity_basis must be native, or output for a Link")
+            factor = pd.Series(1.0, index=idx)
+            if basis == "output":
+                if port not in {"bus1", "bus2", "bus3", "bus4"}:
+                    raise ValueError("output capacity requires an output port bus1..bus4")
+                if "p_max_pu" in df and (df.loc[idx, "p_max_pu"] <= 0).any():
+                    raise ValueError("output capacity is not supported for reversed Links; use native units")
+                efficiency = "efficiency" + (port[3:] if port != "bus1" else "")
+                if efficiency not in df or not getattr(n, table + "_t")[efficiency].columns.intersection(idx).empty:
+                    raise ValueError("output capacity requires a static positive efficiency; use native for time-varying or reversed Links")
+                factor = df.loc[idx, efficiency].astype(float)
+                if not np.isfinite(factor).all() or (factor <= 0).any():
+                    raise ValueError("output capacity requires a static positive efficiency")
+            baseline = df.loc[idx, [attr, attr + "_min"]].max(axis=1) * factor
+            maximum = df.loc[idx, attr + "_max"] * factor
+            if (not np.isfinite(baseline).all() or (baseline < 0).any()
+                    or maximum.isna().any() or (maximum < baseline).any()):
+                raise ValueError("existing capacity bounds are invalid or exceed potential")
+            before = baseline.sum()
+            allocated = _allocate_capacity_override(baseline, maximum, target or 0.0, distribution)
+            capacity = allocated / factor
+            assignments.append((df, idx, attr, capacity, rule.get("extendable"), label, before, allocated.sum(), unit))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(prefix + str(exc)) from exc
+    for df, idx, attr, capacity, extendable, label, before, after, unit in assignments:
+        df.loc[idx, attr] = capacity
+        df.loc[idx, attr + "_min"] = capacity
+        if extendable is not None:
+            df.loc[idx, attr + "_extendable"] = extendable
+        logger.info("Capacity override %s: %s components, %.3f -> %.3f %s; extendable=%s",
+                    label, len(idx), before, after, unit.removeprefix("minimum_"),
+                    extendable if extendable is not None else "preserved")
+
 
 def define_spatial(nodes, options):
     """
@@ -7344,6 +7539,11 @@ if __name__ == "__main__":
         apply_existing_pit_capacities(
             n, fix_cfg["pit_storage_MWh"], node_map=existing_node_map
         )
+
+    apply_capacity_overrides(
+        n, options.get("capacity_overrides", []), investment_year,
+        node_map=existing_node_map,
+    )
 
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)

@@ -54,6 +54,33 @@ atlite:
 foresight: overnight   
 
 sector:
+  # See doc/capacity-overrides.md for node/bus selection, storage and Link units.
+  capacity_overrides:
+    - name: DE_rooftop
+      years: [2025]
+      component: Generator
+      carrier: solar rooftop
+      countries: [DE]
+      minimum_mw: 55000
+      extendable: true
+      distribution: existing_then_potential
+
+    - name: DE_solar
+      years: [2025]
+      component: Generator
+      carrier: solar
+      countries: [DE]
+      minimum_mw: 52000
+      extendable: true
+      distribution: existing_then_potential
+
+    - name: DE_no_new_coal_CHP
+      years: [2025]
+      component: Link
+      carrier: urban central coal CHP
+      countries: [DE]
+      extendable: false
+  
   district_heating:
     potential:
       DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme

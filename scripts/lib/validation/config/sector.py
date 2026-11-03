@@ -375,6 +375,10 @@ class _ImportsConfig(BaseModel):
 class SectorConfig(BaseModel):
     """Configuration for `sector` settings."""
 
+    capacity_overrides: list[dict] = Field(
+        default_factory=list,
+        description="Capacity floors and expansion settings applied during sector network preparation.",
+    )
     transport: bool = Field(True, description="Flag to include transport sector.")
     heating: bool = Field(True, description="Flag to include heating sector.")
     biomass: bool = Field(True, description="Flag to include biomass sector.")
