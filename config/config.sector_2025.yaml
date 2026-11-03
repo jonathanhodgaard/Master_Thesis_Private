@@ -79,6 +79,7 @@ sector:
       component: Link
       carrier: urban central coal CHP
       countries: [DE]
+      port: bus1
       extendable: false
   
   district_heating:
