@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_2035" # use this to keep track of runs with different settings
+  name: "sector_2035_w_HT" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
