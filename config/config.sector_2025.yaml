@@ -73,17 +73,15 @@ sector:
   bev_dsm: false #Almost negiligible effect on 2025. Can be set to true for 2035.
   v2g: false #turn on by 2035? https://ens.dk/media/8525/download 
   # EV share per country and year (added ourselves). Countries/years missing here fall back to land_transport_electric_share.
-  # Source: https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer (car-based shares).
-  # 2035 = 2025 + 31 percentage points (projected Europe 36% in 2035 vs 5% in 2025), same increase for all countries.
-  # NB: the share applies to ALL land transport (road + non-electric rail are one demand), so it probably overstates electrification.
+  # 2035 = our own 2025 estimate + 40 percentage points (projected to raise with 40 % from 2025 to 2035 in pypsa eur) same increase for all countries.
   land_transport_electric_share_by_country:
-    NL: {2025: 0.06, 2035: 0.37}
-    DE: {2025: 0.04, 2035: 0.35}
-    DK: {2025: 0.25, 2035: 0.56}
-    SE: {2025: 0.10, 2035: 0.41}
-    'NO': {2025: 0.30, 2035: 0.61} # quoted, otherwise YAML reads NO as false
-    FI: {2025: 0.04, 2035: 0.35}
-    GB: {2025: 0.05, 2035: 0.36}
+    NL: {2025: 0.083, 2035: 0.484}
+    DE: {2025: 0.035, 2035: 0.435}
+    DK: {2025: 0.11, 2035: 0.511}
+    SE: {2025: 0.084, 2035: 0.484}
+    'NO': {2025: 0.215, 2035: 0.615} # quoted, otherwise YAML reads NO as false
+    FI: {2025: 0.06, 2035: 0.46}
+    GB: {2025: 0.069, 2035: 0.469}
   # Existing capacities from data/existing_infrastructure (added ourselves). If missing: applied in every year.
   existing_infrastructure:
     apply_in_years: [2025] # years in which the CSV capacities are applied
@@ -148,7 +146,7 @@ sector:
   municipal_solid_waste: true
   solid_biomass_import: #do dynamic pricing instead of fixed? As per the default setting.
     enable: true
-
+  
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 industry:
