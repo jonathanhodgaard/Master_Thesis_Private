@@ -6,7 +6,7 @@
 
 
 run:
-  name: "base_2025_sector_june_july_2013_2014" # use this to keep track of runs with different settings
+  name: "sector_2025_fix" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -54,6 +54,34 @@ atlite:
 foresight: overnight   
 
 sector:
+  # See doc/capacity-overrides.md for node/bus selection, storage and Link units.
+  capacity_overrides:
+    - name: DE_rooftop
+      years: [2025]
+      component: Generator
+      carrier: solar rooftop
+      countries: [DE]
+      minimum_mw: 55000
+      extendable: true
+      distribution: existing_then_potential
+
+    - name: DE_solar
+      years: [2025]
+      component: Generator
+      carrier: solar
+      countries: [DE]
+      minimum_mw: 52000
+      extendable: true
+      distribution: existing_then_potential
+
+    - name: DE_no_new_coal_CHP
+      years: [2025]
+      component: Link
+      carrier: urban central coal CHP
+      countries: [DE]
+      port: bus1
+      extendable: false
+  
   district_heating:
     potential:
       DK:    0.752 #This number results in disctrict heating share of 70% urban central heating. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
