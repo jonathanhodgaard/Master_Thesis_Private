@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_2035_w_HT" # use this to keep track of runs with different settings
+  name: "sector_2035_w_V2G" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -22,8 +22,8 @@ scenario:
 countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
 
 snapshots:
-  start: "2013-01-01"
-  end: "2014-01-01"
+  start: "2013-07-01"
+  end: "2014-07-01"
   inclusive: left
 
 #co2_budget is included in default, and goes to 2035?
@@ -33,12 +33,13 @@ electricity:
   transmission_limit: v1.0
 
 atlite:
+  default_cutout: europe-2011-2016-era5
   cutouts:
-    "europe-2013-sarah3-era5":
+    "europe-2011-2016-era5":
       module: era5
-      x: [-12., 32.0]
-      y: [47.0, 72.0] 
-      time: ["2013-01-01", "2013-12-31"] #change to include winters
+      x: [-12.0, 35.0]
+      y: [33.0, 72.0]
+      time: ["2011-01-01", "2016-12-31"]
 
 foresight: overnight
 
@@ -105,7 +106,7 @@ sector:
     - oil #Added ourselves in codebase
   dac: false
   hydrogen_fuel_cell: true
-  hydrogen_turbine: true 
+  hydrogen_turbine: false
   SMR_cc: false
   oil_boilers: true
 
@@ -155,8 +156,7 @@ clustering:
     resolution_sector: 1h  
 
 solving:
-  model_kwargs:
-    solver_dir: "/scratch"
+  # Temporary storage is directed to /scratch by the submission script.
   solver:
     name: gurobi
     options: gurobi-default
