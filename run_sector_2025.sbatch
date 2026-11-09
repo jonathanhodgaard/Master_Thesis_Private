@@ -16,14 +16,24 @@ cd /work/users/s203684/projects/Master_Thesis_Private
 source /home/s203684/miniforge3/etc/profile.d/conda.sh
 conda activate "$PWD/.conda-env"
 
+# Use compute-node disk rather than the memory-backed /tmp filesystem.
+test -w /scratch
+task_tmp_dir=$(mktemp -d "/scratch/${USER}-sector2025-${SLURM_JOB_ID}-XXXXXX")
+export TMPDIR="$task_tmp_dir"
+export TMP="$task_tmp_dir"
+export TEMP="$task_tmp_dir"
+
 echo "Running on $(hostname)"
 echo "Environment: $CONDA_PREFIX"
+python -c "import tempfile; print('Python temporary directory:', tempfile.gettempdir())"
+df -h "$PWD" "$TMPDIR"
+df -i "$PWD" "$TMPDIR"
 
 python -c "import gurobipy as gp; m = gp.Model(); print('Gurobi license OK'); m.dispose()"
-test -w /scratch
 
 snakemake --executor local \
   --cores "$SLURM_CPUS_PER_TASK" \
+  --default-resources tmpdir="$TMPDIR" \
   --printshellcmds \
   results/sector_2025_fix/networks/base_s_10___2025.nc \
   --configfile config/config.sector_2025.yaml config/config.sophia.yaml

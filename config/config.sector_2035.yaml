@@ -65,8 +65,8 @@ sector:
   bev_dsm: true #Almost negiligible effect on 2025. Can be set to true for 2035.
   v2g: true #turn on by 2035? https://ens.dk/media/8525/download 
   # EV share per country and year (added ourselves). Countries/years missing here fall back to land_transport_electric_share.
- # 2035 = our own 2025 estimate + 40 percentage points (projected to raise with 40 % from 2025 to 2035 in pypsa eur) same increase for all countries. land_transport_electric_share_by_country:
- land_transport_electric_share_by_country:
+  # 2035 = our own 2025 estimate + 40 percentage points (projected to raise with 40 % from 2025 to 2035 in pypsa eur) same increase for all countries. land_transport_electric_share_by_country:
+  land_transport_electric_share_by_country:
     NL: {2025: 0.083, 2035: 0.484}
     DE: {2025: 0.035, 2035: 0.435}
     DK: {2025: 0.11, 2035: 0.511}
