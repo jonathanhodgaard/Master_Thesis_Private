@@ -9,4 +9,19 @@ solver: "gurobi" # solver to be used for optimization
 scenario: 
   
 
-  BASE:
+  name: "BASE"
+  atlite:
+  default_cutout: europe-2011-2016-era5
+  cutouts:
+    "europe-2011-2016-era5":
+      module: era5
+      x: [-12.0, 35.0]
+      y: [33.0, 72.0]
+      time: ["2011-01-01", "2016-12-31"]
+
+
+  
+  snapshots:
+    start: "2013-07-01"
+    end: "2014-07-01"
+    inclusive: left

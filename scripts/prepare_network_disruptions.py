@@ -61,15 +61,56 @@ def apply_duals_marginal_cost(n, seasonal_storage_duals):
             raise ValueError(f"Unknown component: {component}")
 
 
+
+def add_load_shedding(n, elec_cost=10_000, heat_cost=10_000):
+    # Includes both static and time-varying load values.
+    demand = n.get_switchable_as_dense("Load", "p_set")
+
+    # Sum all loads connected to each bus at every snapshot.
+    demand_by_bus = demand.T.groupby(n.loads.bus).sum().T
+    peak_demand = demand_by_bus.max().clip(lower=0)
+
+    sectors = {
+        "electricity": (["AC", "low voltage"], elec_cost),
+        "heat": (
+            ["urban central heat", "urban decentral heat", "rural heat"],
+            heat_cost,
+        ),
+    }
+
+    for sector, (bus_carriers, cost) in sectors.items():
+        buses = n.buses.index[
+            n.buses.carrier.isin(bus_carriers)
+        ].intersection(peak_demand.index)
+        buses = buses[peak_demand.reindex(buses).gt(0)]
+
+        if buses.empty:
+            continue
+
+        carrier = f"load-shedding-{sector}"
+        if carrier not in n.carriers.index:
+            n.add("Carrier", carrier)
+
+        n.add(
+            "Generator",
+            buses,
+            suffix=f" load shedding {sector}",
+            bus=buses,
+            carrier=carrier,
+            p_nom=peak_demand.reindex(buses).to_numpy(),
+            p_nom_extendable=False,
+            marginal_cost=cost,
+            sign=1.0,
+        )
+
+
 if __name__ == "__main__":
 
     
     n = pypsa.Network(snakemake.input.net)
     
-    seasonal_storage_duals = get_dual_seasonal_storage_value(n, seasonal_storage_types)
     
-    
-    
+
     
     
     

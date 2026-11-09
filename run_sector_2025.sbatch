@@ -35,5 +35,5 @@ snakemake --executor local \
   --cores "$SLURM_CPUS_PER_TASK" \
   --default-resources tmpdir="$TMPDIR" \
   --printshellcmds \
-  results/sector_2025_fix/networks/base_s_10___2025.nc \
+  results/sector_2025/networks/base_s_10___2025.nc \
   --configfile config/config.sector_2025.yaml config/config.sophia.yaml
