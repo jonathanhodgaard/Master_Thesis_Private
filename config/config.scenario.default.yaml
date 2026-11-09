@@ -1,0 +1,12 @@
+
+networkfile: "path/to/network/file" # path to the base or relevant network file
+
+solver: "gurobi" # solver to be used for optimization
+
+
+
+
+scenario: 
+  
+
+  BASE:
