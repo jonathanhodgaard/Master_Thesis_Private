@@ -6,7 +6,7 @@
 
 
 run:
-  name: "sector_2035" # use this to keep track of runs with different settings
+  name: "sector_2035_w_HT" # use this to keep track of runs with different settings
   disable_progressbar: true
 
 
@@ -22,8 +22,8 @@ scenario:
 countries: ['NL', 'DE', 'DK', 'SE', 'NO', 'FI', 'GB'] # included countries
 
 snapshots:
-  start: "2013-07-01"
-  end: "2014-07-01"
+  start: "2013-01-01"
+  end: "2014-01-01"
   inclusive: left
 
 #co2_budget is included in default, and goes to 2035?
@@ -65,7 +65,9 @@ sector:
   bev_dsm: true #Almost negiligible effect on 2025. Can be set to true for 2035.
   v2g: true #turn on by 2035? https://ens.dk/media/8525/download 
   # EV share per country and year (added ourselves). Countries/years missing here fall back to land_transport_electric_share.
-  # 2035 = our own 2025 estimate + 40 percentage points (projected to raise with 40 % from 2025 to 2035 in pypsa eur) same increase for all countries. land_transport_electric_share_by_country:
+  # Source: https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer (car-based shares).
+  # 2035 = 2025 + 31 percentage points (projected Europe 36% in 2035 vs 5% in 2025), same increase for all countries.
+  # NB: the share applies to ALL land transport (road + non-electric rail are one demand), so it probably overstates electrification.
   land_transport_electric_share_by_country:
     NL: {2025: 0.083, 2035: 0.484}
     DE: {2025: 0.035, 2035: 0.435}
@@ -103,7 +105,7 @@ sector:
     - oil #Added ourselves in codebase
   dac: false
   hydrogen_fuel_cell: true
-  hydrogen_turbine: false #or true for sensitivity
+  hydrogen_turbine: false
   SMR_cc: false
   oil_boilers: true
 
