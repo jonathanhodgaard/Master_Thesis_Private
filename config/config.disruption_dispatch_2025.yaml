@@ -1,0 +1,27 @@
+# Overlay on config.sector_2025.yaml and (on SOPHIA) config.sophia.yaml.
+# The donor is already prepared: do not load config.weather_1965_66.yaml here.
+# Use the dispatch batch file (or its --allowed-rules list) so missing/stale
+# external inputs cannot schedule capacity expansion or weather preparation.
+run:
+  default_target_rule: dispatch_disruptions
+
+disruption:
+  base_network: results/sector_2025/networks/base_s_10___2025.nc
+  household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
+  planning_horizon: 2025
+  output_directory: results/disruptions/sector_2025
+  load_shedding:
+    elec_cost: 10000
+    heat_cost: 10000
+  cases:
+    weather_1965_66:
+      weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
+    # To also solve original-weather dispatch, uncomment:
+    # base_weather:
+    #   weather_network: null
+
+solving:
+  options:
+    rolling_horizon: false
+    load_shedding:
+      enable: false  # Already added by prepare_disruption_network.

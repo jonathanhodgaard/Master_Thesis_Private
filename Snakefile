@@ -90,6 +90,9 @@ include: "rules/solve_electricity.smk"
 include: "rules/postprocess.smk"
 include: "rules/development.smk"
 
+if "disruption" in config:
+    include: "rules/prepare_disruption.smk"
+
 
 if config["foresight"] == "overnight":
 
