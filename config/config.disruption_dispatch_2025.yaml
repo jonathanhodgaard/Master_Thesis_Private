@@ -10,6 +10,7 @@ disruption:
   household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
   planning_horizon: 2025
   output_directory: results/disruptions/sector_2025
+  iis_time_limit: 300  # Seconds for conflicting-constraint diagnostics on failure.
   load_shedding:
     elec_cost: 10000
     heat_cost: 10000

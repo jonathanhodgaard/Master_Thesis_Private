@@ -115,3 +115,24 @@ def test_dispatch_uses_existing_eur_solver_without_investment():
     assert status == "ok" and condition == "optimal"
     assert_fixed_capacities(n)
     assert n.generators.at["wind", "p_nom"] == 10
+
+
+def test_infeasibility_report_maps_labels_and_preserves_diagnostic_errors(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from scripts.solve_disruption_dispatch import write_infeasibility_report
+
+    constraints = SimpleNamespace(print_labels=lambda labels: print(f"Bus balance conflict: {labels}"))
+    model = SimpleNamespace(
+        solver_model=Mock(), constraints=constraints,
+        compute_infeasibilities=lambda: [4, 9],
+    )
+    report = tmp_path / "infeasibility.txt"
+    write_infeasibility_report(SimpleNamespace(model=model), report, time_limit=10)
+    assert "Bus balance conflict: [4, 9]" in report.read_text()
+    model.solver_model.setParam.assert_called_once_with("TimeLimit", 10)
+    model.solver_model.write.assert_called_once_with(str(report.with_suffix(".ilp")))
+
+    model.compute_infeasibilities = Mock(side_effect=RuntimeError("IIS unavailable"))
+    write_infeasibility_report(SimpleNamespace(model=model), report)
+    assert "IIS unavailable" in report.read_text()
