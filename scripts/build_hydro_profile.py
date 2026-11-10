@@ -196,6 +196,10 @@ if __name__ == "__main__":
         for year in missing_years:
             eia_stats.loc[year] = eia_stats.median()
 
+    # Atlite slices reference years using string labels; keep appended years sorted.
+    eia_stats.index = eia_stats.index.astype(str)
+    eia_stats = eia_stats.sort_index()
+
     inflow = cutout.runoff(
         shapes=country_shapes,
         smooth=True,
