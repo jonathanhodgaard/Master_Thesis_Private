@@ -3,13 +3,76 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network
+from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network, _clone
 
 
 CAPACITIES = {
     "Generator": "p_nom", "Link": "p_nom", "StorageUnit": "p_nom",
     "Store": "e_nom", "Line": "s_nom", "Transformer": "s_nom",
 }
+
+FUEL_ACCOUNTING_END_USES = {
+    "land transport oil": "land transport",
+    "gas for industry": "industry",
+    "coal for industry": "industry",
+    "solid biomass for industry": "industry",
+    "industry methanol": "industry",
+    "kerosene for aviation": "aviation",
+    "shipping oil": "shipping",
+    "shipping methanol": "shipping",
+    "agriculture machinery oil": "agriculture machinery",
+}
+
+
+def add_fuel_backup_links(n, options):
+    """Parallel fuel-delivery accounting links; upstream fuel is still required."""
+    old = list(n.meta.get("fuel_backup_links", {}))
+    n.remove("Link", n.links.index.intersection(old))
+    n.meta = {**n.meta, "fuel_backup_links": {}}
+    if not options.get("enable", False):
+        return
+    multiplier = float(options.get("capacity_multiplier", 1.0))
+    premium = float(options.get("marginal_cost_premium", 0.1))
+    if not np.isfinite([multiplier, premium]).all() or multiplier <= 0 or premium <= 0:
+        raise ValueError("Fuel backup multiplier and marginal cost premium must be positive and finite.")
+
+    carriers = options.get("carriers", list(FUEL_ACCOUNTING_END_USES))
+    originals = n.links.index[n.links.carrier.isin(carriers)]
+    costs = n.get_switchable_as_dense("Link", "marginal_cost")
+    metadata = {}
+    for original in originals:
+        row = n.links.loc[original]
+        if not np.isfinite(row.p_nom) or row.p_nom < 0:
+            raise ValueError(f"Invalid fixed fuel-delivery capacity: {original}")
+        if row.p_nom == 0:
+            continue
+        name = original + " fuel backup"
+        if name in n.links.index:
+            raise ValueError(f"Fuel backup name already exists: {name}")
+        carrier = "fuel backup " + row.carrier
+        if carrier not in n.carriers.index:
+            n.add("Carrier", carrier)
+        _clone(n, "Link", original, name, {
+            "carrier": carrier,
+            "p_nom": row.p_nom * multiplier,
+            "p_nom_extendable": False,
+            "p_nom_min": 0,
+            "p_nom_max": row.p_nom * multiplier,
+            "capital_cost": 0,
+            "marginal_cost": costs[original] + premium,
+        })
+        destination = n.buses.loc[row.bus1]
+        country = destination.get("country", "")
+        if not country:
+            location = str(destination.get("location", ""))
+            country = location[:2] if location[:2].isalpha() else "EU"
+        metadata[name] = {
+            "original_link": original,
+            "fuel": str(n.buses.at[row.bus0, "carrier"]),
+            "end_use": FUEL_ACCOUNTING_END_USES.get(row.carrier, row.carrier),
+            "country": country,
+        }
+    n.meta = {**n.meta, "fuel_backup_links": metadata}
 
 
 def assert_fixed_capacities(n):
@@ -233,6 +296,7 @@ if __name__ == "__main__":
     if weather_file:
         set_weather(n, pypsa.Network(weather_file))
 
+    add_fuel_backup_links(n, dict(snakemake.params.fuel_backup))
     add_load_shedding(n, **dict(snakemake.params.load_shedding))
     assert_fixed_capacities(n)
     n.meta = {**n.meta, "disruption_preparation": {

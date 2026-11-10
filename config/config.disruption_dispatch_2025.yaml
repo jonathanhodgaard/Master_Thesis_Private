@@ -11,6 +11,21 @@ disruption:
   planning_horizon: 2025
   output_directory: results/disruptions/sector_2025
   iis_time_limit: 300  # Seconds for conflicting-constraint diagnostics on failure.
+  fuel_backup:
+    enable: true
+    capacity_multiplier: 1.0  # Backup capacity relative to the original fixed link.
+    marginal_cost_premium: 0.1  # EUR/MWh of fuel input, added to original link cost.
+    # Accounting delivery only: exclude pipelines, boilers, and carbon-capture equipment.
+    carriers:
+      - land transport oil
+      - gas for industry
+      - coal for industry
+      - solid biomass for industry
+      - industry methanol
+      - kerosene for aviation
+      - shipping oil
+      - shipping methanol
+      - agriculture machinery oil
   load_shedding:
     elec_cost: 10000
     heat_cost: 10000

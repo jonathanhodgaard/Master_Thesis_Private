@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 import logging
 
 import pypsa
+import pandas as pd
 
 from scripts._helpers import configure_logging
 from scripts.prepare_network_disruptions import assert_fixed_capacities
@@ -11,6 +12,25 @@ from scripts.household_heat_constraints import META_KEY, save_household_heat_sha
 from scripts import solve_network as eur_solver
 
 logger = logging.getLogger(__name__)
+
+
+def save_fuel_backup_dispatch(n, csv_path):
+    """Report backup use per link, labelled by fuel, country and end use."""
+    rows = []
+    weights = n.snapshot_weightings.generators
+    for name, info in n.meta.get("fuel_backup_links", {}).items():
+        flow = n.links_t.p0[name].clip(lower=0)
+        delivered = (-n.links_t.p1[name]).clip(lower=0)
+        rows.append({
+            "backup_link": name, **info,
+            "backup_capacity_MW": n.links.at[name, "p_nom"],
+            "peak_input_MW": flow.max(),
+            "input_MWh": flow.mul(weights).sum(),
+            "delivered_MWh": delivered.mul(weights).sum(),
+        })
+    columns = ["backup_link", "original_link", "fuel", "end_use", "country",
+               "backup_capacity_MW", "peak_input_MW", "input_MWh", "delivered_MWh"]
+    pd.DataFrame(rows, columns=columns).to_csv(csv_path, index=False)
 
 
 def write_infeasibility_report(n, report_path, time_limit=300):
@@ -79,4 +99,5 @@ if __name__ == "__main__":
         Path(snakemake.output.household_heat_shares).write_text(
             "group,share,heat_bus,technology\n", encoding="utf-8",
         )
+    save_fuel_backup_dispatch(n, snakemake.output.fuel_backup_dispatch)
     n.export_to_netcdf(snakemake.output.network)

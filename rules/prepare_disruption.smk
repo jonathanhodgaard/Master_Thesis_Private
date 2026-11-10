@@ -21,6 +21,7 @@ rule prepare_disruption_network:
         net=DISRUPTION_DIR + "/{case}/network_prepared.nc",
     params:
         load_shedding=DISRUPTION["load_shedding"],
+        fuel_backup=DISRUPTION.get("fuel_backup", {}),
     script:
         "../scripts/prepare_network_disruptions.py"
 
@@ -31,6 +32,7 @@ rule solve_disruption_dispatch:
     output:
         network=DISRUPTION_DIR + "/{case}/network_solved.nc",
         household_heat_shares=DISRUPTION_DIR + "/{case}/household_heat_shares.csv",
+        fuel_backup_dispatch=DISRUPTION_DIR + "/{case}/fuel_backup_dispatch.csv",
     log:
         solver=DISRUPTION_DIR + "/{case}/solver.log",
         python=DISRUPTION_DIR + "/{case}/dispatch.log",

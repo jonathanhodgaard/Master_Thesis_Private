@@ -5,7 +5,7 @@ import pypsa
 import pytest
 
 from scripts.prepare_network_disruptions import (
-    add_load_shedding, assert_fixed_capacities, set_weather,
+    add_load_shedding, add_fuel_backup_links, assert_fixed_capacities, set_weather,
 )
 
 
@@ -136,3 +136,54 @@ def test_infeasibility_report_maps_labels_and_preserves_diagnostic_errors(tmp_pa
     model.compute_infeasibilities = Mock(side_effect=RuntimeError("IIS unavailable"))
     write_infeasibility_report(SimpleNamespace(model=model), report)
     assert "IIS unavailable" in report.read_text()
+
+
+def test_parallel_fuel_backup_preserves_emissions_and_reports_weighted_dispatch(tmp_path):
+    from scripts.solve_disruption_dispatch import save_fuel_backup_dispatch
+    n = pypsa.Network()
+    n.set_snapshots(pd.date_range("2013-07-01", periods=2, freq="h"))
+    n.snapshot_weightings.loc[:, :] = np.array([[1], [2]])
+    n.add("Bus", "oil", carrier="oil")
+    n.add("Bus", "transport", carrier="land transport oil", country="NO")
+    n.add("Bus", "co2", carrier="co2")
+    n.add("Store", "atmosphere", bus="co2", e_nom=100)
+    n.add("Generator", "oil source", bus="oil", p_nom=20, marginal_cost=10)
+    n.add("Load", "travel", bus="transport", p_set=[4, 6])
+    n.add("Link", "oil delivery", carrier="land transport oil", bus0="oil",
+          bus1="transport", bus2="co2", efficiency2=[0.2, 0.3],
+          p_nom=5, marginal_cost=[0.2, 0.3])
+    # A physical link must not be backed up merely because it consumes fuel.
+    n.add("Link", "boiler", carrier="oil boiler", bus0="oil", bus1="transport", p_nom=0)
+    options = {"enable": True, "capacity_multiplier": 1.0, "marginal_cost_premium": 0.1}
+    add_fuel_backup_links(n, options)
+    add_fuel_backup_links(n, options)  # Refresh without adding duplicates.
+    backup = "oil delivery fuel backup"
+    assert len(n.meta["fuel_backup_links"]) == 1
+    assert n.links.at[backup, "p_nom"] == 5
+    assert n.links.at["oil delivery", "p_nom"] == 5
+    assert n.links.at[backup, "bus2"] == "co2"
+    np.testing.assert_allclose(n.links_t.efficiency2[backup], [0.2, 0.3])
+    np.testing.assert_allclose(n.links_t.marginal_cost[backup], [0.3, 0.4])
+    assert_fixed_capacities(n)
+    status, condition = n.optimize(solver_name="highs")
+    assert status == "ok" and condition == "optimal"
+    np.testing.assert_allclose(n.links_t.p0[backup], [0, 1], atol=1e-7)
+    np.testing.assert_allclose(n.links_t.p2[backup], [0, -0.3], atol=1e-7)
+    path = tmp_path / "fuel_backup_dispatch.csv"
+    save_fuel_backup_dispatch(n, path)
+    row = pd.read_csv(path).iloc[0]
+    assert (row.fuel, row.end_use, row.country) == ("oil", "land transport", "NO")
+    assert row.peak_input_MW == pytest.approx(1)
+    assert row.input_MWh == pytest.approx(2)
+    assert row.delivered_MWh == pytest.approx(2)
+
+
+def test_fuel_backup_can_be_disabled_and_empty_report_has_headers(tmp_path):
+    from scripts.solve_disruption_dispatch import save_fuel_backup_dispatch
+    n = network(2013)
+    add_fuel_backup_links(n, {"enable": False})
+    path = tmp_path / "fuel_backup_dispatch.csv"
+    save_fuel_backup_dispatch(n, path)
+    assert pd.read_csv(path).empty
+    with pytest.raises(ValueError, match="positive"):
+        add_fuel_backup_links(n, {"enable": True, "marginal_cost_premium": -1})
