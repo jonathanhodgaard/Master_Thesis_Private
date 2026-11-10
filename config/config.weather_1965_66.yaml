@@ -48,6 +48,10 @@ renewable:
   hydro:
     cutout: default
 
+conventional:
+  nuclear:
+    p_max_pu: data/nuclear_p_max_pu_reference_2013.csv
+
 sector:
   heat_demand_cutout: default
 
