@@ -109,8 +109,11 @@ if __name__ == "__main__":
     
     n = pypsa.Network(snakemake.input.net)
     
+    # fix capacities of the network
+    n.optimize.fix_optimal_capacities()
     
-
+    
+    n = add_load_shedding(n)
     
     
     

@@ -1,0 +1,59 @@
+# Master_Thesis_Private/config/config.weather_1965_66.yaml
+
+run:
+  prefix: weather_1965_66
+
+  scenarios:
+    enable: false
+
+  shared_resources:
+    policy: false
+    exclude: []
+
+snapshots:
+  start: "1965-07-01"
+  end: "1966-07-01"
+  inclusive: left
+
+enable:
+  drop_leap_day: true
+
+data:
+  cutout:
+    source: archive
+    version: v1.0
+
+atlite:
+  default_cutout: europe-1961-1966-era5
+  cutouts:
+    europe-1961-1966-era5:
+      module: era5
+      x: [-12.0, 35.0]
+      y: [33.0, 72.0]
+      time: ["1961-01-01", "1966-12-31"]
+
+renewable:
+  onwind:
+    cutout: default
+  offwind-ac:
+    cutout: default
+  offwind-dc:
+    cutout: default
+  offwind-float:
+    cutout: default
+  solar:
+    cutout: default
+  solar-hsat:
+    cutout: default
+  hydro:
+    cutout: default
+
+sector:
+  heat_demand_cutout: default
+
+solar_thermal:
+  cutout: default
+
+lines:
+  dynamic_line_rating:
+    cutout: default
