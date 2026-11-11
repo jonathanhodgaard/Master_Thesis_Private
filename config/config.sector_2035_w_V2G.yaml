@@ -124,6 +124,9 @@ sector:
 
   H2_network: false
 
+  co2_sequestration_potential:
+    2035: 0
+
   biomass_transport: true
   biogas_upgrading_cc: true #https://app.powerbi.com/view?r=eyJrIjoiMzhmNzZmZGMtYjUyYS00YzExLWEwNzYtZWRiMzY4NWI0NDYzIiwidCI6ImEzYjVlZTgyLTZiMDctNGQ3My1iNzdjLWJmNDgwZDA3MTBiZiIsImMiOjl9
 
@@ -156,6 +159,8 @@ clustering:
     resolution_sector: 1h  
 
 solving:
+  options:
+    assign_all_duals: true 
   # Temporary storage is directed to /scratch by the submission script.
   solver:
     name: gurobi
