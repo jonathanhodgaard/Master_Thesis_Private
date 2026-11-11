@@ -194,7 +194,7 @@ clustering:
 
 solving:
   options:
-    assign_all_duals: true
+    assign_all_duals: true 
   model_kwargs:
     solver_dir: "/scratch"
   solver:
