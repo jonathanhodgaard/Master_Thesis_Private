@@ -165,67 +165,6 @@ def household_demands(n):
         n.links.at[delivery, "p_nom"] = max(n.links.at[delivery, "p_nom"], demand.max())
     return demands
 
-# List of carriers that are seasonal storage types
-seasonal_storage_types = [
-    "hydro",                     # Reservoir hydro
-    "urban central water pits",  # Potential seasonal heat storage
-    "gas",                       # May be the carrier used for gas stores
-    "H2",                        # Hydrogen storage
-]
-
-
-
-def get_dual_seasonal_storage_value(n, seasonal_storage_type):
-
-    tables = {}
-
-    for component, assets, time_series in [("StorageUnit", n.storage_units, n.storage_units_t),("Store", n.stores, n.stores_t),]:
-        
-        selected = assets.index[assets["carrier"].isin(seasonal_storage_types)]
-
-        if selected.empty:
-            continue
-
-        duals = time_series.get("mu_energy_balance")
-
-        if duals is None:
-            raise ValueError(
-                f"No storage-balance duals saved for {component}."
-            )
-
-        missing = selected.difference(duals.columns)
-        if not missing.empty:
-            raise ValueError(
-                f"Missing duals for {component}: {missing.tolist()}. "
-                "Check whether duals were assigned before network export."
-            )
-
-        values = duals.loc[:, selected]
-
-        if values.isna().any().any():
-            raise ValueError(
-                f"Some selected {component} duals contain missing values."
-            )
-
-        tables[component] = values
-
-    if not tables:
-        raise ValueError("No storage assets matched the selected carriers.")
-
-    return pd.concat(tables, axis=1, names=["component", "asset"])
-
-    
-def apply_duals_marginal_cost(n, seasonal_storage_duals):
-    for (component, asset), values in seasonal_storage_duals.items():
-        if component == "StorageUnit":
-            n.storage_units_t.loc[:, asset] = values
-        elif component == "Store":
-            n.stores_t.loc[:, asset] = values
-        else:
-            raise ValueError(f"Unknown component: {component}")
-
-
-
 def add_load_shedding(n, elec_cost=10_000, heat_cost=10_000):
     # Includes both static and time-varying load values.
     demand = n.get_switchable_as_dense("Load", "p_set")
@@ -295,6 +234,10 @@ if __name__ == "__main__":
     weather_file = snakemake.input.get("weather", [])
     if weather_file:
         set_weather(n, pypsa.Network(weather_file))
+
+    if snakemake.params.get("rolling_horizon", False):
+        from scripts.disruption_waste_hvc import prepare_waste_hvc
+        prepare_waste_hvc(n, snakemake.params.rolling.get("waste_hvc", {}))
 
     add_fuel_backup_links(n, dict(snakemake.params.fuel_backup))
     add_load_shedding(n, **dict(snakemake.params.load_shedding))

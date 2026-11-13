@@ -65,6 +65,14 @@ class _BiomassClassesConfig(ConfigModel):
 class BiomassConfig(BaseModel):
     """Configuration for `biomass` settings."""
 
+    enforce_minimum_use: bool = Field(
+        True,
+        description="Require retained historical biomass, biogas and bioliquid supply. False keeps only annual upper limits; waste and HVC are unaffected.",
+    )
+    export_budget_duals: bool = Field(
+        False,
+        description="Export annual fuel-budget duals after an overnight sector solve to network metadata and CSV.",
+    )
     year: int = Field(
         2030,
         ge=2010,

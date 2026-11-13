@@ -531,6 +531,8 @@ energy:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#biomass
 biomass:
+  enforce_minimum_use: true # Retain historical fuel supply; false makes use optional within annual limits.
+  export_budget_duals: false # Save annual fuel-limit duals in the solved network metadata and a CSV.
   year: 2030
   scenario: ENS_Med
   classes:

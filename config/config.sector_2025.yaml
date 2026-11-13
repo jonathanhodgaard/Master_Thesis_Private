@@ -28,6 +28,10 @@ snapshots:
 
 co2_budget: null #no co2 budget, only a co2 price for this run
 
+biomass:
+  enforce_minimum_use: false
+  export_budget_duals: true
+
 electricity:
   extendable_carriers:
     Generator: []

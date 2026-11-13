@@ -19,6 +19,12 @@ rule solve_sector_network:
             if config["sector"].get("household_heat_allocation", {}).get("enable", False)
             else []
         ),
+        resource_budget_duals=(
+            RESULTS
+            + "csvs/resource_budget_duals_base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.csv"
+            if config.get("biomass", {}).get("export_budget_duals", False)
+            else []
+        ),
         model=(
             RESULTS
             + "models/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"

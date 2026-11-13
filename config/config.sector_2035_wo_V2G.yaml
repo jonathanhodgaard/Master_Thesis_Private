@@ -28,6 +28,10 @@ snapshots:
 
 #co2_budget is included in default, and goes to 2035?
 
+biomass:
+  enforce_minimum_use: false
+  export_budget_duals: true
+
 electricity:
   estimate_battery_capacities: true
   transmission_limit: v1.0
@@ -88,7 +92,7 @@ sector:
   fix_existing_capacity:
     enable: true
     countries: [DK]
-    years: [2025] # only 2025, so nothing is fixed in this 2035 run
+    years: [2035] # only 2035, so nothing is fixed in this 2035 run
     keep_extendable_carriers: "(rural|urban decentral) gas boiler" # regex; covers services and agriculture heat not in the CSVs
     block_new_carriers: [urban central coal CHP, urban central oil CHP, coal, lignite, CCGT, OCGT]
     block_new_carrier_suffixes: [" CC"] # carbon capture variants

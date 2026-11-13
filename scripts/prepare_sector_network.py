@@ -4469,6 +4469,7 @@ def add_biomass(
     biomass_potentials_file,
     biomass_transport_costs_file=None,
     nyears=1,
+    enforce_minimum_use=True,
 ):
     """
     Add biomass-related components to the PyPSA network.
@@ -4504,6 +4505,10 @@ def add_biomass(
         Required if biomass_transport or biomass_spatial options are True.
     nyears : float
         Number of years for which to scale the biomass potentials.
+    enforce_minimum_use : bool
+        Require historical biogas, solid biomass and bioliquid supply. False
+        retains their annual upper limits but permits unused fuel. Waste and
+        HVC accounting are unaffected.
 
     Returns
     -------
@@ -4699,7 +4704,9 @@ def add_biomass(
             p_nom=unsustainable_biogas_potentials_spatial,
             p_nom_extendable=False,
             marginal_cost=costs.at["biogas", "fuel"],
-            e_sum_min=unsustainable_biogas_potentials_spatial,
+            e_sum_min=(
+                unsustainable_biogas_potentials_spatial if enforce_minimum_use else 0
+            ),
             e_sum_max=unsustainable_biogas_potentials_spatial,
         )
 
@@ -4711,7 +4718,9 @@ def add_biomass(
             p_nom=unsustainable_solid_biomass_potentials_spatial,
             p_nom_extendable=False,
             marginal_cost=costs.at["fuelwood", "fuel"],
-            e_sum_min=unsustainable_solid_biomass_potentials_spatial,
+            e_sum_min=(
+                unsustainable_solid_biomass_potentials_spatial if enforce_minimum_use else 0
+            ),
             e_sum_max=unsustainable_solid_biomass_potentials_spatial,
         )
 
@@ -4731,7 +4740,9 @@ def add_biomass(
             p_nom=unsustainable_liquid_biofuel_potentials_spatial,
             p_nom_extendable=False,
             marginal_cost=costs.at["biodiesel crops", "fuel"],
-            e_sum_min=unsustainable_liquid_biofuel_potentials_spatial,
+            e_sum_min=(
+                unsustainable_liquid_biofuel_potentials_spatial if enforce_minimum_use else 0
+            ),
             e_sum_max=unsustainable_liquid_biofuel_potentials_spatial,
         )
 
@@ -4899,7 +4910,7 @@ def add_biomass(
                 "GlobalConstraint",
                 "unsustainable biomass limit",
                 carrier_attribute="unsustainable solid biomass",
-                sense="==",
+                sense="==" if enforce_minimum_use else "<=",
                 constant=biomass_potentials["unsustainable solid biomass"].sum(),
                 type="operational_limit",
             )
@@ -7283,6 +7294,9 @@ if __name__ == "__main__":
             biomass_potentials_file=snakemake.input.biomass_potentials,
             biomass_transport_costs_file=snakemake.input.biomass_transport_costs,
             nyears=nyears,
+            enforce_minimum_use=snakemake.params.biomass.get(
+                "enforce_minimum_use", True
+            ),
         )
 
     if options["ammonia"]:

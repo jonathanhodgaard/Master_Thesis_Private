@@ -56,6 +56,7 @@ from scripts.household_heat_constraints import (
     add_household_heat_constraints,
     save_household_heat_shares,
 )
+from scripts.resource_budget_duals import save_resource_budget_duals
 
 logger = logging.getLogger(__name__)
 
@@ -1452,6 +1453,7 @@ def create_optimization_model(
     model_kwargs: dict,
     solve_kwargs: dict,
     planning_horizons: str | None = None,
+    snapshots: pd.DatetimeIndex | None = None,
 ) -> None:
     """
     Prepare optimization problem by creating model and adding extra functionality.
@@ -1475,6 +1477,9 @@ def create_optimization_model(
         Arguments for n.optimize.solve_model()
     planning_horizons : str, optional
         The current planning horizon year or None in perfect foresight
+    snapshots : pd.DatetimeIndex, optional
+        Window to optimize; defaults to all snapshots. Full network context is
+        retained so ramp constraints can use previously implemented dispatch.
     """
     # Add config and params to network for extra_functionality
     n.config = config
@@ -1482,11 +1487,12 @@ def create_optimization_model(
 
     # Create optimization model
     logger.info("Creating optimization model...")
-    n.optimize.create_model(**model_kwargs)
+    snapshots = n.snapshots if snapshots is None else snapshots
+    n.optimize.create_model(snapshots=snapshots, **model_kwargs)
 
     # Add extra functionality (custom constraints)
     logger.info("Adding extra functionality (custom constraints)...")
-    extra_functionality(n, n.snapshots, planning_horizons)
+    extra_functionality(n, snapshots, planning_horizons)
 
 
 if __name__ == "__main__":
@@ -1530,6 +1536,8 @@ if __name__ == "__main__":
 
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)
+    if rolling_horizon and snakemake.output.get("resource_budget_duals"):
+        raise ValueError("Annual fuel-budget dual export requires a full-horizon solve.")
     skip_iterations = cf_solving.get("skip_iterations", False)
 
     if not n.lines.s_nom_extendable.any():
@@ -1628,6 +1636,10 @@ if __name__ == "__main__":
     save_household_heat_shares(
         n, snakemake.output.household_heat_shares
     )
+
+    budget_path = snakemake.output.get("resource_budget_duals")
+    if budget_path:
+        save_resource_budget_duals(n, budget_path)
     
     n.meta = {
         **n.meta,

@@ -1,4 +1,4 @@
-"""Full-horizon dispatch using the existing PyPSA-Eur model constraints."""
+"""Full or rolling disruption dispatch using the existing sector constraints."""
 from pathlib import Path
 from contextlib import redirect_stdout
 import logging
@@ -65,8 +65,7 @@ if __name__ == "__main__":
     assert_fixed_capacities(n)
     if META_KEY in n.meta and n.meta[META_KEY].get("mode") != "dispatch":
         raise ValueError("Household shares must be fixed before dispatch.")
-    if snakemake.params.solving["options"].get("rolling_horizon", False):
-        raise ValueError("This rule solves full-horizon dispatch; disable rolling_horizon.")
+    rolling = snakemake.params.solving["options"].get("rolling_horizon", False)
     # Reuse constraints without rerunning investment/topology preparation.
     eur_solver.snakemake = snakemake
     horizon = str(snakemake.config["disruption"]["planning_horizon"])
@@ -78,19 +77,39 @@ if __name__ == "__main__":
         # Otherwise presolve may report only the ambiguous INF_OR_UNBD status.
         solve_kwargs["solver_options"] = dict(solve_kwargs["solver_options"])
         solve_kwargs["solver_options"]["DualReductions"] = 0
-    eur_solver.create_optimization_model(
-        n, snakemake.config, snakemake.params,
-        model_kwargs, solve_kwargs, planning_horizons=horizon,
-    )
-    status, condition = n.optimize.solve_model(**solve_kwargs)
-    if status != "ok" or condition != "optimal":
-        report = Path(snakemake.output.network).with_name("infeasibility.txt")
-        if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
-            write_infeasibility_report(
-                n, report,
-                snakemake.config["disruption"].get("iis_time_limit", 300),
-            )
-        raise RuntimeError(f"Dispatch did not solve optimally: {status}, {condition}")
+    reports = {}
+    if rolling:
+        from scripts.rolling_disruption_dispatch import solve_rolling_dispatch
+
+        directory = Path(snakemake.output.network).parent
+
+        def on_failure(network, number, status, condition):
+            if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
+                write_infeasibility_report(
+                    network, directory / f"infeasibility_window_{number:04d}.txt",
+                    snakemake.config["disruption"].get("iis_time_limit", 300),
+                )
+
+        reports = solve_rolling_dispatch(
+            n, pypsa.Network(snakemake.input.reference), snakemake.config,
+            snakemake.params, model_kwargs, solve_kwargs, horizon,
+            snakemake.params.rolling, output_directory=directory,
+            failure_callback=on_failure,
+        )
+    else:
+        eur_solver.create_optimization_model(
+            n, snakemake.config, snakemake.params,
+            model_kwargs, solve_kwargs, planning_horizons=horizon,
+        )
+        status, condition = n.optimize.solve_model(**solve_kwargs)
+        if status != "ok" or condition != "optimal":
+            report = Path(snakemake.output.network).with_name("infeasibility.txt")
+            if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
+                write_infeasibility_report(
+                    n, report,
+                    snakemake.config["disruption"].get("iis_time_limit", 300),
+                )
+            raise RuntimeError(f"Dispatch did not solve optimally: {status}, {condition}")
     assert_fixed_capacities(n)
     Path(snakemake.output.network).parent.mkdir(parents=True, exist_ok=True)
     if META_KEY in n.meta:
@@ -100,4 +119,13 @@ if __name__ == "__main__":
             "group,share,heat_bus,technology\n", encoding="utf-8",
         )
     save_fuel_backup_dispatch(n, snakemake.output.fuel_backup_dispatch)
+    for name in ("resource_usage", "storage_msv", "window_summary", "dispatch_summary"):
+        if snakemake.output.get(name):
+            if name not in reports:
+                from scripts.rolling_disruption_dispatch import RESOURCE_COLUMNS, MSV_COLUMNS
+                columns = RESOURCE_COLUMNS if name == "resource_usage" else MSV_COLUMNS if name == "storage_msv" else ["mode", "objective_EUR"]
+                reports[name] = pd.DataFrame(columns=columns)
+                if name == "dispatch_summary":
+                    reports[name] = pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective}])
+            reports[name].to_csv(snakemake.output[name], index=False)
     n.export_to_netcdf(snakemake.output.network)
