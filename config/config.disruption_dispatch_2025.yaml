@@ -59,11 +59,11 @@ disruption:
     elec_cost: 10000
     heat_cost: 10000
   cases:
-    weather_1965_66:
-      weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
+    # weather_1965_66:
+    #   weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
     # To also solve original-weather dispatch, uncomment:
-    # base_weather:
-    #   weather_network: null
+    base_weather:
+      weather_network: null
 
 solving:
   options:
