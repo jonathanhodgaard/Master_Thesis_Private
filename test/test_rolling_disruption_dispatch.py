@@ -214,6 +214,42 @@ def test_co2_budget_becomes_price_without_changing_sequestration():
     assert "sequestration" in n.global_constraints.index
 
 
+def test_hvc_accounting_disposal_does_not_force_summer_heat_production():
+    # The annual model burns all material when useful. Uniform arrivals and a
+    # short backlog require a non-energy route during low heat demand instead.
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=8, freq="h"))
+    for bus, carrier in (("heat", "heat"), ("hvc", "non-sequestered HVC"), ("air", "co2")):
+        ref.add("Carrier", carrier)
+        ref.add("Bus", bus, carrier=carrier)
+    ref.add("Load", "heat demand", bus="heat", p_set=[0.5] * 6 + [2.5] * 2)
+    ref.add("Generator", "heat shedding", bus="heat", p_nom=10, marginal_cost=10000)
+    ref.add("Store", "products", bus="hvc", carrier="non-sequestered HVC", e_nom=8, e_initial=8)
+    ref.stores_t.e_max_pu["products"] = [1] * 7 + [0]
+    ref.add("Store", "atmosphere", bus="air", carrier="co2", e_nom=np.inf, e_min_pu=-1)
+    ref.add("Link", "waste boiler", bus0="hvc", bus1="heat", bus2="air",
+            carrier="urban central waste boiler", p_nom=2.5, efficiency=1, efficiency2=2,
+            marginal_cost=0.01)
+    ref.add("Link", "release", bus0="hvc", bus1="air", carrier="HVC to air", p_nom=0,
+            efficiency=2, marginal_cost=0.01)
+    solve(ref)
+    n = ref.copy()
+    prepare_waste_hvc(n, {"backlog_hours": 2})
+    assert n.links.at["release", "p_nom"] == 3
+    assert n.links.at["waste boiler", "p_nom"] == ref.links.at["waste boiler", "p_nom"]
+    assert n.links.at["release", "efficiency"] == 2
+    # Recreate the former frozen-disposal behavior: a later rolling window fails.
+    old = n.copy()
+    old.links.at["release", "p_nom"] = 0
+    with pytest.raises(RuntimeError, match="infeasible"):
+        run(old, ref, options={"horizon": 3, "overlap": 1})
+    reports = run(n, ref, options={"horizon": 3, "overlap": 1})
+    assert n.links_t.p0.release.sum() > 0
+    assert reports["dispatch_summary"].net_emissions_tCO2.item() == pytest.approx(16)
+    assert n.generators_t.p["products material arrivals"].sum() == pytest.approx(8)
+    assert ref.links.at["release", "p_nom"] == 0
+
+
 def test_household_shares_remain_fixed_in_every_window():
     from scripts.household_heat_constraints import META_KEY, add_household_heat_constraints
     ref = pypsa.Network()

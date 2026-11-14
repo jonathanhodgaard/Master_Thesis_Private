@@ -43,6 +43,7 @@ def prepare_waste_hvc(n, options):
     stores = n.stores.index[n.stores.carrier.eq("non-sequestered HVC")]
     if len(waste) and rates.sum() > 0 and stores.empty:
         raise ValueError("Municipal waste arrivals require the shared HVC treatment system.")
+    disposal_updates = []
     for name in stores:
         bus = n.stores.at[name, "bus"]
         quantity = float(n.stores.at[name, "e_initial"])
@@ -61,8 +62,28 @@ def prepare_waste_hvc(n, options):
         if options.get("require_empty_at_period_end", True):
             # Only the true accounting-year end, not an early test/report cutoff.
             n.stores_t.e_max_pu.loc[n.snapshots[-1], name] = 0.0
+        # HVC to air is carbon-accounting disposal/decay, not installed waste
+        # incineration capacity. Freezing its tiny full-year optimized rating
+        # would force uniform arrivals into heat-producing plants in summer.
+        # Permit incoming material plus the whole bounded backlog to be released
+        # within one hourly interval, including at the true year-end deadline.
+        disposal = n.links.index[
+            n.links.bus0.eq(bus) & n.links.carrier.eq("HVC to air")
+            & n.links.bus1.map(n.buses.carrier).eq("co2")
+        ]
+        required = rate + incoming + capacity
+        if required > 0 and disposal.empty:
+            raise ValueError(f"Missing HVC to air accounting disposal route at {bus}.")
+        for link in disposal:
+            previous = float(n.links.at[link, "p_nom"])
+            rating = max(previous, required)
+            n.links.loc[link, ["p_nom", "p_nom_opt", "p_nom_min", "p_nom_max"]] = rating
+            n.links.at[link, "p_nom_extendable"] = False
+            disposal_updates.append({"link": link, "previous_input_capacity_MW": previous,
+                                     "input_capacity_MW": rating})
     if "HVC material arrivals" not in n.carriers.index and len(stores):
         n.add("Carrier", "HVC material arrivals")
     n.meta = {**n.meta, "rolling_waste_hvc": {"stores": stores.tolist(),
               "mode": "uniform_arrivals", "backlog_hours": backlog_hours,
+              "accounting_disposal_links": disposal_updates,
               "accounting_end": str(n.snapshots[-1])}}

@@ -37,7 +37,7 @@ disruption:
       replace_budget_with_price: true
     waste_hvc:
       mode: uniform_arrivals
-      backlog_hours: 48
+      backlog_hours: 0 # Each hour's arrivals must be used for energy or disposed; no material storage.
       initial_backlog_MWh: 0
       require_empty_at_period_end: true
   fuel_backup:
