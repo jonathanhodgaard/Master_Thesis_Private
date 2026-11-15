@@ -1,0 +1,8 @@
+# Load after config.disruption_dispatch_2025_mixed_msv.yaml.
+# Seven-day look-ahead; implement two days before reoptimization.
+disruption:
+  output_directory: results/disruptions/sector_2025_rolling_mixed_msv_7day_2day
+  rolling_horizon:
+    horizon: 168
+    overlap: 120 # Implement horizon - overlap = 48 hours.
+# Waste treatment remains on its independent 96-hour calendar periods.
