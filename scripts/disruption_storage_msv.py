@@ -45,6 +45,9 @@ def apply_reference_msv(n, reference, options):
     aggregation = options.get("aggregation", "annual_mean")
     if aggregation not in {"annual_mean", "hourly"}:
         raise ValueError("MSV aggregation must be annual_mean or hourly.")
+    overrides = options.get("aggregation_by_carrier", {})
+    if not isinstance(overrides, dict) or any(v not in {"annual_mean", "hourly"} for v in overrides.values()):
+        raise ValueError("MSV aggregation_by_carrier must map carriers to annual_mean or hourly.")
     if options.get("source", "mu_energy_balance") != "mu_energy_balance":
         raise ValueError("Supported MSV source is mu_energy_balance.")
     if len(n.snapshots.difference(reference.snapshots)):
@@ -63,14 +66,22 @@ def apply_reference_msv(n, reference, options):
         annual = duals.loc[reference.snapshots, names]
         if not np.isfinite(annual.to_numpy()).all():
             raise ValueError(f"Nonfinite reference {component} storage-balance duals.")
-        values[component] = annual.mean() if aggregation == "annual_mean" else annual.loc[n.snapshots].copy()
+        modes = n.components[component].static.loc[names, "carrier"].map(overrides).fillna(aggregation)
+        if modes.eq("annual_mean").all():
+            values[component] = annual.mean()
+        else:
+            profile = annual.loc[n.snapshots].copy()
+            averaged = names[modes.eq("annual_mean")]
+            for name in averaged:
+                profile[name] = annual[name].mean()
+            values[component] = profile
         records.extend({"component": component, "asset": name,
                         "MSV_EUR_per_MWh_stored": float(value),
                         "reference_start": str(reference.snapshots[0]),
                         "reference_end": str(reference.snapshots[-1]),
-                        "aggregation": aggregation,
-                        "minimum_MSV_EUR_per_MWh_stored": float(annual[name].min()) if aggregation == "hourly" else float(value),
-                        "maximum_MSV_EUR_per_MWh_stored": float(annual[name].max()) if aggregation == "hourly" else float(value)}
+                        "aggregation": modes[name],
+                        "minimum_MSV_EUR_per_MWh_stored": float(annual[name].min()) if modes[name] == "hourly" else float(value),
+                        "maximum_MSV_EUR_per_MWh_stored": float(annual[name].max()) if modes[name] == "hourly" else float(value)}
                        for name, value in annual.mean().items())
     # Snapshot the unmodified costs, including replacement inventory sources.
     original = {}
@@ -89,7 +100,8 @@ def apply_reference_msv(n, reference, options):
         n.storage_units_t.marginal_cost[units.columns] = original["StorageUnit", "marginal_cost"][units.columns] + units / efficiency
         n.storage_units_t.spill_cost[units.columns] = original["StorageUnit", "spill_cost"][units.columns] + units
     n.meta = {**n.meta, "disruption_msv_applied": True, "disruption_storage_msv": records,
-              "disruption_msv_aggregation": aggregation}
+              "disruption_msv_aggregation": aggregation,
+              "disruption_msv_aggregation_by_carrier": dict(overrides)}
     return values, original
 
 

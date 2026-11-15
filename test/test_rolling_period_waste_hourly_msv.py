@@ -72,3 +72,31 @@ def test_invalid_waste_period_fails(period):
     n.set_snapshots(pd.date_range("2025-01-01", periods=4, freq="h"))
     with pytest.raises(ValueError, match="positive integer"):
         prepare_waste_hvc(n, {"treatment_period_hours": period})
+
+
+def test_mixed_msv_keeps_fuel_values_constant_and_seasonal_values_hourly():
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=3, freq="h"))
+    for carrier in ("gas", "urban central water pits"):
+        ref.add("Carrier", carrier)
+        ref.add("Bus", carrier, carrier=carrier)
+        ref.add("Load", carrier, bus=carrier, p_set=1)
+        ref.add("Generator", carrier, bus=carrier, p_nom=2, marginal_cost=[20, 21, 22])
+        ref.add("Store", carrier, bus=carrier, carrier=carrier, e_nom=1, e_initial=1)
+    solve(ref)
+    for name in ref.stores.index:
+        ref.stores_t.mu_energy_balance[name] = [5, 40, 40]
+    n = ref.copy()
+    reports = run(n, ref, options={"horizon": 3, "overlap": 1, "storage": {"msv": {
+        "aggregation": "hourly", "aggregation_by_carrier": {"gas": "annual_mean"},
+        "stores": {"carriers": ["gas", "urban central water pits"]},
+    }}})
+    modes = reports["storage_msv"].set_index("asset").aggregation
+    assert modes.gas == "annual_mean"
+    assert modes["urban central water pits"] == "hourly"
+    assert np.allclose(reports["storage_msv_timeseries"]["Store::gas"], 85 / 3)
+    assert reports["storage_msv_timeseries"]["Store::urban central water pits"].tolist() == [5, 40, 40]
+    assert np.allclose(n.stores_t.p.gas, 0)
+    assert np.allclose(n.stores_t.p["urban central water pits"], [1, -1, 0])
+    assert reports["dispatch_summary"].MSV_charge_EUR.item() == pytest.approx(-35)
+    assert not n.meta["rolling_dispatch"]["resource_allowances_enforced"]

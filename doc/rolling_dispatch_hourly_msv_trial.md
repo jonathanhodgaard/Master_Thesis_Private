@@ -1,5 +1,30 @@
 # Hourly MSV and period waste-treatment trial
 
+## Trial with annual-average fuel values
+
+The subsequent trial uses `config/config.disruption_dispatch_2025_mixed_msv.yaml`
+after the original 2025 dispatch configuration. Submit it with:
+
+```bash
+sbatch run_dispatch_2025_base_weather_mixed_msv.sbatch
+```
+
+It retains hourly values for the selected heat pits and hydro, but overrides
+gas, biomass, coal, lignite, oil, methanol, H2 Store and ammonia store to use
+their full-reference-year mean. The generic `msv.aggregation_by_carrier` mapping
+overrides `msv.aggregation` for matching selected assets; it does not change
+which assets are selected. Each asset's actual aggregation is recorded in
+`storage_msv.csv`, and its applied profile in `storage_msv_timeseries.csv`.
+
+The four-day waste buffer, five-day horizon and one-day overlap remain in place.
+Allowances remain price-only: counters report usage and exceedances, without
+imposing new resource ceilings. Annual-average fuel values do not guarantee
+that allowances will be respected. Results go to
+`results/disruptions/sector_2025_rolling_mixed_msv/base_weather`, preserving both
+previous runs for comparison.
+
+## Original hourly trial
+
 Load `config/config.disruption_dispatch_2025_hourly_msv.yaml` after the existing
 2025 dispatch configuration. Submit on Sophia with:
 

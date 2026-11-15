@@ -1,0 +1,24 @@
+# Load after config.disruption_dispatch_2025.yaml.
+# Keep the waste buffer; use hourly physical-storage values and annual fuel values.
+disruption:
+  output_directory: results/disruptions/sector_2025_rolling_mixed_msv
+  rolling_horizon:
+    resources:
+      enforce_allowances: false
+    storage:
+      msv:
+        aggregation: hourly
+        aggregation_by_carrier:
+          gas: annual_mean
+          biomass: annual_mean
+          coal: annual_mean
+          lignite: annual_mean
+          oil: annual_mean
+          methanol: annual_mean
+          H2 Store: annual_mean
+          ammonia store: annual_mean
+    waste_hvc:
+      treatment_period_hours: 96
+      backlog_hours: 96
+      initial_backlog_MWh: 0
+      require_empty_at_period_end: true
