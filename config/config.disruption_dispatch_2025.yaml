@@ -59,7 +59,7 @@ disruption:
       - agriculture machinery oil
   load_shedding:
     elec_cost: 10000
-    heat_cost: 10000
+    heat_cost: 20000
   cases:
     # weather_1965_66:
     #   weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
