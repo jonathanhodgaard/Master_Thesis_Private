@@ -12,11 +12,11 @@ disruption:
   output_directory: results/disruptions/sector_2025_rolling
   iis_time_limit: 300  # Seconds for conflicting-constraint diagnostics on failure.
   rolling_horizon:
-    horizon: 48
-    overlap: 24 # Implement 24 hours; reoptimise the overlap.
+    horizon: 120
+    overlap: 24
     simulation:
       start: null
-      end: "2013-07-15" # Exclusive; initial two-week test. null uses the whole year.
+      end: null
     resources:
       apply_scarcity_prices: true
       enforce_allowances: false # Price-only; consumption and exceedances are still reported.
