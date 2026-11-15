@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Annual-average reference MSVs applied to seasonal storage flows, not endpoints."""
+"""Reference MSVs applied to seasonal storage flows, not endpoints."""
 from contextlib import contextmanager
 
 import numpy as np
@@ -31,9 +31,24 @@ def selected_storage(n, component, settings):
     return names.intersection(table.index[capacity > 0])
 
 
-def apply_annual_msv(n, reference, options):
+def msv_profile(values, snapshots):
+    """Align hourly values or broadcast an annual mean to the requested hours."""
+    if isinstance(values, pd.DataFrame):
+        return values.loc[snapshots]
+    return pd.DataFrame(np.tile(values.to_numpy(), (len(snapshots), 1)),
+                        index=snapshots, columns=values.index)
+
+
+def apply_reference_msv(n, reference, options):
     """Add MSV once; return original cost inputs for separate physical-cost reporting."""
     validate_hourly_network(reference)
+    aggregation = options.get("aggregation", "annual_mean")
+    if aggregation not in {"annual_mean", "hourly"}:
+        raise ValueError("MSV aggregation must be annual_mean or hourly.")
+    if options.get("source", "mu_energy_balance") != "mu_energy_balance":
+        raise ValueError("Supported MSV source is mu_energy_balance.")
+    if len(n.snapshots.difference(reference.snapshots)):
+        raise ValueError("Missing reference hours for storage MSVs.")
     if n.meta.get("disruption_msv_applied", False):
         raise ValueError("MSV costs have already been applied to this network.")
     values, records = {}, []
@@ -48,42 +63,50 @@ def apply_annual_msv(n, reference, options):
         annual = duals.loc[reference.snapshots, names]
         if not np.isfinite(annual.to_numpy()).all():
             raise ValueError(f"Nonfinite reference {component} storage-balance duals.")
-        values[component] = annual.mean()
+        values[component] = annual.mean() if aggregation == "annual_mean" else annual.loc[n.snapshots].copy()
         records.extend({"component": component, "asset": name,
                         "MSV_EUR_per_MWh_stored": float(value),
                         "reference_start": str(reference.snapshots[0]),
-                        "reference_end": str(reference.snapshots[-1])}
-                       for name, value in values[component].items())
+                        "reference_end": str(reference.snapshots[-1]),
+                        "aggregation": aggregation,
+                        "minimum_MSV_EUR_per_MWh_stored": float(annual[name].min()) if aggregation == "hourly" else float(value),
+                        "maximum_MSV_EUR_per_MWh_stored": float(annual[name].max()) if aggregation == "hourly" else float(value)}
+                       for name, value in annual.mean().items())
     # Snapshot the unmodified costs, including replacement inventory sources.
     original = {}
     for component in ("Generator", "Link", "Store", "StorageUnit"):
         for attr in ("marginal_cost", "marginal_cost_quadratic", "marginal_cost_storage", "spill_cost"):
             if attr in n.components[component].defaults.index:
                 original[component, attr] = n.get_switchable_as_dense(component, attr).copy()
-    stores = values["Store"]
+    stores = msv_profile(values["Store"], n.snapshots)
     if not stores.empty:
-        n.stores_t.marginal_cost[stores.index] = original["Store", "marginal_cost"][stores.index].add(stores, axis=1)
-    units = values["StorageUnit"]
+        n.stores_t.marginal_cost[stores.columns] = original["Store", "marginal_cost"][stores.columns] + stores
+    units = msv_profile(values["StorageUnit"], n.snapshots)
     if not units.empty:
-        efficiency = n.get_switchable_as_dense("StorageUnit", "efficiency_dispatch")[units.index]
+        efficiency = n.get_switchable_as_dense("StorageUnit", "efficiency_dispatch")[units.columns]
         if (efficiency <= 0).any().any():
             raise ValueError("Selected storage units require positive discharge efficiency.")
-        n.storage_units_t.marginal_cost[units.index] = original["StorageUnit", "marginal_cost"][units.index] + units / efficiency
-        n.storage_units_t.spill_cost[units.index] = original["StorageUnit", "spill_cost"][units.index].add(units, axis=1)
-    n.meta = {**n.meta, "disruption_msv_applied": True, "disruption_storage_msv": records}
+        n.storage_units_t.marginal_cost[units.columns] = original["StorageUnit", "marginal_cost"][units.columns] + units / efficiency
+        n.storage_units_t.spill_cost[units.columns] = original["StorageUnit", "spill_cost"][units.columns] + units
+    n.meta = {**n.meta, "disruption_msv_applied": True, "disruption_storage_msv": records,
+              "disruption_msv_aggregation": aggregation}
     return values, original
+
+
+# Retain compatibility with callers using the original annual-only helper.
+apply_annual_msv = apply_reference_msv
 
 
 def add_msv_charging_credit(n, snapshots, values):
     """StorageUnit native marginal_cost covers discharge only; credit charging."""
-    units = values["StorageUnit"]
+    units = msv_profile(values["StorageUnit"], snapshots)
     if units.empty:
         return
-    eta = n.get_switchable_as_dense("StorageUnit", "efficiency_store", snapshots)[units.index]
-    coefficients = eta.mul(units, axis=1).mul(n.snapshot_weightings.objective.loc[snapshots], axis=0)
+    eta = n.get_switchable_as_dense("StorageUnit", "efficiency_store", snapshots)[units.columns]
+    coefficients = (eta * units).mul(n.snapshot_weightings.objective.loc[snapshots], axis=0)
     coefficients = xr.DataArray(coefficients.to_numpy(), dims=["snapshot", "name"],
-                                coords={"snapshot": snapshots, "name": units.index})
-    charging = n.model["StorageUnit-p_store"].sel(snapshot=snapshots, name=units.index)
+                                coords={"snapshot": snapshots, "name": units.columns})
+    charging = n.model["StorageUnit-p_store"].sel(snapshot=snapshots, name=units.columns)
     n.model.objective -= (charging * coefficients).sum()
 
 
@@ -157,16 +180,16 @@ def storage_boundary_losses(n, snapshot):
 
 def msv_cost(n, snapshots, values):
     total = 0.0
-    stores, units = values["Store"], values["StorageUnit"]
+    stores, units = (msv_profile(values[c], snapshots) for c in ("Store", "StorageUnit"))
     if not stores.empty:
-        total += n.stores_t.p.loc[snapshots, stores.index].mul(stores, axis=1).to_numpy().sum()
+        total += (n.stores_t.p.loc[snapshots, stores.columns] * stores).to_numpy().sum()
     if not units.empty:
-        names = units.index
+        names = units.columns
         eta_d = n.get_switchable_as_dense("StorageUnit", "efficiency_dispatch", snapshots)[names]
         eta_s = n.get_switchable_as_dense("StorageUnit", "efficiency_store", snapshots)[names]
         spill = n.storage_units_t.spill.reindex(index=snapshots, columns=names, fill_value=0).fillna(0)
         flow = n.storage_units_t.p_dispatch.loc[snapshots, names] / eta_d - n.storage_units_t.p_store.loc[snapshots, names] * eta_s + spill
-        total += flow.mul(units, axis=1).to_numpy().sum()
+        total += (flow * units).to_numpy().sum()
     return float(total)
 
 

@@ -1,0 +1,14 @@
+# Load after config.disruption_dispatch_2025.yaml; preserve the annual-mean run.
+disruption:
+  output_directory: results/disruptions/sector_2025_rolling_hourly_msv
+  rolling_horizon:
+    storage:
+      msv:
+        aggregation: hourly
+    waste_hvc:
+      # Fixed four-day calendar blocks; arrivals cannot be borrowed in advance.
+      # Backlog must be empty at each deadline, including the final partial block.
+      treatment_period_hours: 96
+      backlog_hours: 96
+      initial_backlog_MWh: 0
+      require_empty_at_period_end: true

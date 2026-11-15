@@ -11,7 +11,7 @@ from scripts.disruption_resource_budgets import (
     replace_co2_budget, add_co2_price,
 )
 from scripts.disruption_storage_msv import (
-    validate_hourly_network, apply_annual_msv, add_msv_charging_credit,
+    validate_hourly_network, apply_reference_msv, msv_profile, add_msv_charging_credit,
     initialize_storage, carry_storage, storage_boundary_losses, msv_cost, operating_cost,
 )
 from scripts.prepare_network_disruptions import assert_fixed_capacities
@@ -19,7 +19,8 @@ from scripts.prepare_network_disruptions import assert_fixed_capacities
 RESOURCE_COLUMNS = ["window", "resource", "carrier", "allowance_MWh", "used_before_run_MWh",
                     "implemented_MWh", "used_in_run_MWh", "remaining_MWh", "exceedance_MWh",
                     "enforced", "scarcity_price_EUR_per_MWh", "scarcity_charge_EUR"]
-MSV_COLUMNS = ["component", "asset", "MSV_EUR_per_MWh_stored", "reference_start", "reference_end"]
+MSV_COLUMNS = ["component", "asset", "MSV_EUR_per_MWh_stored", "reference_start", "reference_end",
+               "aggregation", "minimum_MSV_EUR_per_MWh_stored", "maximum_MSV_EUR_per_MWh_stored"]
 
 
 def output_frames(n):
@@ -73,8 +74,6 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     if options.get("storage", {}).get("initial_state", "base_previous_snapshot") != "base_previous_snapshot":
         raise ValueError("Supported initial_state is base_previous_snapshot.")
     msv_options = options.get("storage", {}).get("msv", {})
-    if msv_options.get("aggregation", "annual_mean") != "annual_mean" or msv_options.get("source", "mu_energy_balance") != "mu_energy_balance":
-        raise ValueError("Supported MSV source is annual_mean of mu_energy_balance.")
     for component in ("Generator", "Link"):
         table = n.components[component].static
         if "committable" in table and table.committable.any():
@@ -91,7 +90,7 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     unsupported = annual.loc[~(annual.carrier_attribute.eq("co2 sequestered") & annual.constant.eq(0))]
     if not unsupported.empty:
         raise ValueError(f"Annual global budgets without a rolling adapter: {unsupported.index.tolist()}")
-    values, original_costs = apply_annual_msv(n, reference, msv_options)
+    values, original_costs = apply_reference_msv(n, reference, msv_options)
     initialize_storage(n, reference, snapshots[0])
     clear_future_results(n, snapshots[0])
     initial_states = {component: n.components[component].static[attr].copy()
@@ -158,6 +157,10 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     return {
         "resource_usage": pd.DataFrame(resource_rows, columns=RESOURCE_COLUMNS),
         "storage_msv": pd.DataFrame(n.meta["disruption_storage_msv"], columns=MSV_COLUMNS),
+        "storage_msv_timeseries": pd.concat(
+            [msv_profile(value, snapshots).add_prefix(component + "::")
+             for component, value in values.items()], axis=1,
+        ).rename_axis("snapshot").reset_index(),
         "window_summary": window_table,
         "dispatch_summary": pd.DataFrame([totals]),
     }

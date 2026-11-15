@@ -26,7 +26,7 @@ disruption:
       msv:
         enable: true
         source: mu_energy_balance
-        aggregation: annual_mean
+        aggregation: annual_mean # Or hourly; see the separate hourly-MSV trial overlay.
         stores:
           # Fuel inventories use their own reference storage-balance MSVs.
           carriers: [urban central water pits, gas, biomass, coal, lignite, oil, methanol, H2 Store, ammonia store]
@@ -38,6 +38,7 @@ disruption:
       replace_budget_with_price: true
     waste_hvc:
       mode: uniform_arrivals
+      treatment_period_hours: null # Positive hours: fixed calendar blocks with empty-backlog deadlines.
       backlog_hours: 0 # Each hour's arrivals must be used for energy or disposed; no material storage.
       initial_backlog_MWh: 0
       require_empty_at_period_end: true

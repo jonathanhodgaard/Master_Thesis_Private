@@ -2,12 +2,24 @@
 """Disruption-only uniform material arrivals and bounded waste/HVC backlog."""
 import numpy as np
 
+from scripts.disruption_storage_msv import validate_hourly_network
+
 
 def prepare_waste_hvc(n, options):
     if options.get("mode", "uniform_arrivals") != "uniform_arrivals":
         raise ValueError("Supported rolling waste/HVC mode is uniform_arrivals.")
     if "rolling_waste_hvc" in n.meta:
         raise ValueError("Waste/HVC arrivals have already been prepared.")
+    period = options.get("treatment_period_hours")
+    deadlines = n.snapshots[-1:]
+    if period is not None:
+        if isinstance(period, bool) or not isinstance(period, int) or period <= 0:
+            raise ValueError("Waste treatment_period_hours must be a positive integer or null.")
+        validate_hourly_network(n)
+        if not options.get("require_empty_at_period_end", True):
+            raise ValueError("A waste treatment period requires empty-at-period-end deadlines.")
+        # Fixed reference-calendar periods, independent of overlapping windows.
+        deadlines = n.snapshots[period - 1::period].union(n.snapshots[-1:])
     hours = float(n.snapshot_weightings.generators.sum())
     backlog_hours = float(options.get("backlog_hours", 48))
     initial = float(options.get("initial_backlog_MWh", 0))
@@ -60,8 +72,8 @@ def prepare_waste_hvc(n, options):
         n.stores_t.e_max_pu[name] = 1.0
         n.stores_t.e_min_pu[name] = 0.0
         if options.get("require_empty_at_period_end", True):
-            # Only the true accounting-year end, not an early test/report cutoff.
-            n.stores_t.e_max_pu.loc[n.snapshots[-1], name] = 0.0
+            # No artificial deadline at an early test/report cutoff.
+            n.stores_t.e_max_pu.loc[deadlines, name] = 0.0
         # HVC to air is carbon-accounting disposal/decay, not installed waste
         # incineration capacity. Freezing its tiny full-year optimized rating
         # would force uniform arrivals into heat-producing plants in summer.
@@ -85,5 +97,7 @@ def prepare_waste_hvc(n, options):
         n.add("Carrier", "HVC material arrivals")
     n.meta = {**n.meta, "rolling_waste_hvc": {"stores": stores.tolist(),
               "mode": "uniform_arrivals", "backlog_hours": backlog_hours,
+              "treatment_period_hours": period,
+              "treatment_deadlines": [str(t) for t in deadlines] if options.get("require_empty_at_period_end", True) else [],
               "accounting_disposal_links": disposal_updates,
               "accounting_end": str(n.snapshots[-1])}}

@@ -12,7 +12,7 @@ rule dispatch_disruptions:
         expand(
             DISRUPTION_DIR + "/{case}/{report}", case=list(DISRUPTION["cases"]),
             report=["network_solved.nc", "household_heat_shares.csv", "fuel_backup_dispatch.csv",
-                    "resource_usage.csv", "storage_msv.csv", "window_summary.csv", "dispatch_summary.csv"],
+                    "resource_usage.csv", "storage_msv.csv", "storage_msv_timeseries.csv", "window_summary.csv", "dispatch_summary.csv"],
         )
 
 
@@ -42,6 +42,7 @@ rule solve_disruption_dispatch:
         fuel_backup_dispatch=DISRUPTION_DIR + "/{case}/fuel_backup_dispatch.csv",
         resource_usage=DISRUPTION_DIR + "/{case}/resource_usage.csv",
         storage_msv=DISRUPTION_DIR + "/{case}/storage_msv.csv",
+        storage_msv_timeseries=DISRUPTION_DIR + "/{case}/storage_msv_timeseries.csv",
         window_summary=DISRUPTION_DIR + "/{case}/window_summary.csv",
         dispatch_summary=DISRUPTION_DIR + "/{case}/dispatch_summary.csv",
     log:

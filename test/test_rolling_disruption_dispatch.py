@@ -131,14 +131,19 @@ def hydro_network(charging=False):
 
 
 @pytest.mark.parametrize("charging", [False, True])
-def test_hydro_msv_efficiency_spill_and_charging_credit(charging):
+@pytest.mark.parametrize("aggregation", ["annual_mean", "hourly"])
+def test_hydro_msv_efficiency_spill_and_charging_credit(charging, aggregation):
     ref = hydro_network(charging)
     ref.storage_units_t.mu_energy_balance["reservoir"] = [6, 6, 18, 18]
     n = ref.copy()
-    values, original = apply_annual_msv(n, ref, {"storage_units": {"carriers": ["hydro"]}})
-    assert values["StorageUnit"].reservoir == 12
+    values, original = apply_annual_msv(n, ref, {"aggregation": aggregation, "storage_units": {"carriers": ["hydro"]}})
+    expected_first = 12 if aggregation == "annual_mean" else 6
+    if aggregation == "annual_mean":
+        assert values["StorageUnit"].reservoir == 12
+    else:
+        assert values["StorageUnit"].reservoir.tolist() == [6, 6, 18, 18]
     assert original["StorageUnit", "marginal_cost"].reservoir.iloc[0] == 1
-    assert n.storage_units_t.marginal_cost.reservoir.iloc[0] == 25
+    assert n.storage_units_t.marginal_cost.reservoir.iloc[0] == 1 + expected_first / 0.5
     n.optimize.create_model()
     add_msv_charging_credit(n, n.snapshots, values)
     assert n.optimize.solve_model(solver_name="highs", log_to_console=False) == ("ok", "optimal")

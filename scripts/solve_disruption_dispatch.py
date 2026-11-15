@@ -119,11 +119,13 @@ if __name__ == "__main__":
             "group,share,heat_bus,technology\n", encoding="utf-8",
         )
     save_fuel_backup_dispatch(n, snakemake.output.fuel_backup_dispatch)
-    for name in ("resource_usage", "storage_msv", "window_summary", "dispatch_summary"):
+    for name in ("resource_usage", "storage_msv", "storage_msv_timeseries", "window_summary", "dispatch_summary"):
         if snakemake.output.get(name):
             if name not in reports:
                 from scripts.rolling_disruption_dispatch import RESOURCE_COLUMNS, MSV_COLUMNS
                 columns = RESOURCE_COLUMNS if name == "resource_usage" else MSV_COLUMNS if name == "storage_msv" else ["mode", "objective_EUR"]
+                if name == "storage_msv_timeseries":
+                    columns = ["snapshot"]
                 reports[name] = pd.DataFrame(columns=columns)
                 if name == "dispatch_summary":
                     reports[name] = pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective}])

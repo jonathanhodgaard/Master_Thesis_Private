@@ -58,6 +58,16 @@ them within each model region:
 
 
 
+# Thesis extensions to PyPSA-Eur v2026.08.0
+
+This thesis fork extends [PyPSA-Eur v2026.08.0](https://github.com/PyPSA/pypsa-eur/releases/tag/v2026.08.0)
+with Danish existing-infrastructure calibration and capacity controls, country-specific EV shares,
+household heating allocation, and full/rolling fixed-capacity disruption dispatch.
+
+See **[Thesis changes, scripts, workflow rules and usage](doc/thesis_changes.md)** for the comparison
+with the release, new and modified scripts/rules, scenario configurations, inputs, reports,
+compatibility fixes, and companion data-preparation scripts. Notebooks are excluded.
+
 # Warnings
 
 PyPSA-Eur is under active development and has several
