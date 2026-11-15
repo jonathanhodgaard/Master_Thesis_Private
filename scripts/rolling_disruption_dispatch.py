@@ -12,7 +12,7 @@ from scripts.disruption_resource_budgets import (
 )
 from scripts.disruption_storage_msv import (
     validate_hourly_network, apply_annual_msv, add_msv_charging_credit,
-    initialize_storage, carry_storage, msv_cost, operating_cost,
+    initialize_storage, carry_storage, storage_boundary_losses, msv_cost, operating_cost,
 )
 from scripts.prepare_network_disruptions import assert_fixed_capacities
 
@@ -103,10 +103,11 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
         window = snapshots[start:start + horizon]
         implemented = window[:step]
         initial_co2 = float(n.stores.loc[atmosphere, "e_initial"].sum())
-        eur_solver.create_optimization_model(
-            n, deepcopy(config), params, model_kwargs, solve_kwargs,
-            planning_horizons=str(planning_horizon), snapshots=window,
-        )
+        with storage_boundary_losses(n, window[0]):
+            eur_solver.create_optimization_model(
+                n, deepcopy(config), params, model_kwargs, solve_kwargs,
+                planning_horizons=str(planning_horizon), snapshots=window,
+            )
         add_resource_terms(n, window, budgets)
         add_msv_charging_credit(n, window, values)
         add_co2_price(n, window, co2_price)

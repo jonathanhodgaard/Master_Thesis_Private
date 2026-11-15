@@ -177,6 +177,39 @@ def run_store_continuity(ref):
     return reports
 
 
+@pytest.mark.parametrize("start_position", [0, 2])
+def test_storage_standing_losses_apply_once_at_every_hour(start_position):
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=8, freq="h"))
+    for bus in ("tank", "reservoir", "grid"):
+        ref.add("Bus", bus)
+    # Isolated storage buses prohibit net energy exchange, so only standing
+    # losses can change the inventories. The generator supplies an objective.
+    ref.add("Generator", "idle", bus="grid", p_nom=1, marginal_cost=10)
+    ref.add("Store", "tank", bus="tank", e_nom=100, e_initial=80,
+            standing_loss=pd.Series([0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08], index=ref.snapshots))
+    ref.add("StorageUnit", "reservoir", bus="reservoir", p_nom=100, max_hours=1,
+            state_of_charge_initial=60, p_min_pu=0, p_max_pu=0,
+            standing_loss=pd.Series([0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01], index=ref.snapshots))
+    solve(ref)
+    n = ref.copy()
+    reports = run(n, ref, options={"horizon": 4, "overlap": 2,
+                                 "simulation": {"start": str(ref.snapshots[start_position])}})
+    assert len(reports["window_summary"]) >= 3
+    for component, asset, state, initial in (
+        ("Store", "tank", "e", "e_initial"),
+        ("StorageUnit", "reservoir", "state_of_charge", "state_of_charge_initial"),
+    ):
+        c, original = n.components[component], ref.components[component]
+        expected_initial = (original.static.at[asset, initial] if start_position == 0
+                            else original.dynamic[state].at[ref.snapshots[start_position - 1], asset])
+        # Exported initial conditions remain the physical preceding-hour state.
+        assert c.static.at[asset, initial] == pytest.approx(expected_initial)
+        losses = n.get_switchable_as_dense(component, "standing_loss")[asset]
+        expected = expected_initial * (1 - losses).cumprod()
+        np.testing.assert_allclose(c.dynamic[state][asset], expected, atol=1e-7)
+
+
 def test_waste_hvc_arrivals_preserve_carbon_and_true_deadline():
     ref = pypsa.Network()
     ref.set_snapshots(pd.date_range("2025-07-01", periods=4, freq="h"))

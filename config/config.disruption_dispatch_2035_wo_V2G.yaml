@@ -28,8 +28,8 @@ disruption:
         source: mu_energy_balance
         aggregation: annual_mean
         stores:
-          carriers: [urban central water pits]
-          assets: [] # Add individually verified seasonal gas/H2 assets here.
+          carriers: [urban central water pits, gas, biomass]
+          assets: [] # Optional additional assets, e.g. individually selected H2 stores.
         storage_units:
           carriers: [hydro]
           assets: [] # Long-duration PHS can be selected individually.

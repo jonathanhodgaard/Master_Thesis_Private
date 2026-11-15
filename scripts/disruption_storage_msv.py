@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Annual-average reference MSVs applied to seasonal storage flows, not endpoints."""
+from contextlib import contextmanager
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -124,6 +126,33 @@ def carry_storage(n, snapshot):
         if not np.isfinite(values.to_numpy()).all():
             raise ValueError(f"Missing solved {component} states at {snapshot}.")
         c.static[initial] = values
+
+
+@contextmanager
+def storage_boundary_losses(n, snapshot):
+    """Pass post-loss initial stocks to PyPSA, retaining physical states outside model creation.
+
+    Native noncyclic storage balances use initial stocks without standing losses
+    at the first snapshot. Apply that snapshot's retention factor exactly once;
+    PyPSA handles losses for the remaining snapshots inside the window.
+    """
+    originals = {}
+    try:
+        hours = n.snapshot_weightings.at[snapshot, "stores"]
+        for component, initial in (("Store", "e_initial"),
+                                   ("StorageUnit", "state_of_charge_initial")):
+            table = n.components[component].static
+            if table.empty:
+                continue
+            loss = n.get_switchable_as_dense(component, "standing_loss", pd.Index([snapshot])).loc[snapshot]
+            if not np.isfinite(loss.to_numpy()).all() or not loss.between(0, 1).all():
+                raise ValueError(f"Invalid {component} standing losses at {snapshot}.")
+            originals[component, initial] = table[initial].copy()
+            table[initial] = originals[component, initial] * (1 - loss) ** hours
+        yield
+    finally:
+        for (component, initial), values in originals.items():
+            n.components[component].static[initial] = values
 
 
 def msv_cost(n, snapshots, values):

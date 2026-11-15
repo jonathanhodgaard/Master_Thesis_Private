@@ -1,0 +1,4 @@
+solving:
+  options:
+    model_kwargs:
+      solver_dir: "/scratch"
