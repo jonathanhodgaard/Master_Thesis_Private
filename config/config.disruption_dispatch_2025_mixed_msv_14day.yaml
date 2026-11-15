@@ -1,0 +1,7 @@
+# Load after config.disruption_dispatch_2025_mixed_msv.yaml.
+# Retain four-day implementation and all other mixed-MSV settings.
+disruption:
+  output_directory: results/disruptions/sector_2025_rolling_mixed_msv_14day
+  rolling_horizon:
+    horizon: 336
+    overlap: 240 # Implement horizon - overlap = 96 hours.
