@@ -177,6 +177,36 @@ def run_store_continuity(ref):
     return reports
 
 
+def test_configured_fuel_msv_prices_opening_stocks_against_new_supply():
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=3, freq="h"))
+    fuels = ["gas", "biomass", "coal", "lignite", "oil", "methanol", "H2 Store", "ammonia store"]
+    for i, fuel in enumerate(fuels):
+        ref.add("Carrier", fuel)
+        ref.add("Bus", fuel, carrier=fuel)
+        ref.add("Load", fuel, bus=fuel, p_set=1)
+        # Rising supply prices remove equal-cost withdrawal/refill schedules.
+        supply_price = (20 if i % 2 == 0 else 40) + np.arange(len(ref.snapshots))
+        ref.add("Generator", fuel, bus=fuel, p_nom=2,
+                marginal_cost=pd.Series(supply_price, index=ref.snapshots))
+        ref.add("Store", fuel, bus=fuel, carrier=fuel, e_nom=10, e_initial=10, marginal_cost=1)
+    solve(ref)
+    # A synthetic reference value distinguishes opening-stock opportunity cost
+    # from its original handling cost, using all reference hours for the mean.
+    ref.stores_t.mu_energy_balance.loc[:, fuels] = np.array([10, 30, 50])[:, None]
+    path = Path(__file__).resolve().parents[1] / "config/config.disruption_dispatch_2025.yaml"
+    msv = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]["msv"]
+    n = ref.copy()
+    reports = run(n, ref, options={"horizon": 2, "overlap": 1, "storage": {"msv": msv}})
+    for i, fuel in enumerate(fuels):
+        # Stock costs 30 + 1 per MWh, so buy new supply at 20-22, but use
+        # stock instead of buying at 40-42.
+        np.testing.assert_allclose(n.stores_t.p[fuel], 0 if i % 2 == 0 else 1, atol=1e-7)
+        np.testing.assert_allclose(n.generators_t.p[fuel], 1 if i % 2 == 0 else 0, atol=1e-7)
+    assert set(reports["storage_msv"].asset) == set(fuels)
+    assert reports["storage_msv"].MSV_EUR_per_MWh_stored.eq(30).all()
+
+
 @pytest.mark.parametrize("start_position", [0, 2])
 def test_storage_standing_losses_apply_once_at_every_hour(start_position):
     ref = pypsa.Network()
