@@ -71,3 +71,10 @@ solving:
     rolling_horizon: true
     load_shedding:
       enable: false  # Already added by prepare_disruption_network.
+
+  solver_options:
+    gurobi-default:
+      BarConvTol: 1.0e-8
+      FeasibilityTol: 1.0e-7
+      OptimalityTol: 1.0e-7
+      crossover: -1
