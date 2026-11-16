@@ -8,7 +8,7 @@ disruption:
   base_network: results/sector_2025/networks/base_s_10___2025.nc
   household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
   planning_horizon: 2025
-  output_directory: results/disruptions/sector_2025_dispatch
+  output_directory: results/disruptions/sector_2025_dispatch_fuel_caps_july60
   iis_time_limit: 300
 
   rolling_horizon:
@@ -19,10 +19,22 @@ disruption:
       end: null # Exclusive cutoff when set; independent of outage dates below.
     resources:
       apply_scarcity_prices: true
-      enforce_allowances: false
+      # Preserve finite domestic biofuel/resource limits and the configured import
+      # allowance across windows. Scarcity prices still guide conservation.
+      # The 1390 TWh biomass-import allowance is a scenario assumption, not data.
+      enforce_allowances: true
       overrides: {}
     storage:
       initial_state: base_previous_snapshot
+      initial_inventory:
+        - countries: [DK]
+          carriers: [gas]
+          start_month_day: "07-01"
+          fill_fraction: 0.60
+          # National July 2025 target; not the historical stock (33%). Applying
+          # the same fraction to both regional stores is an allocation assumption.
+          # Initial stock only: no permanent 60% minimum and no later reset.
+          basis: "Target-based July start: Denmark 1 July 2025 target 60%; ENS https://ens.dk/presse/udbud-skal-bidrage-til-fylde-gaslagre-foer-vinteren ; capacity remains the frozen reference rating pending working-gas-volume calibration."
       msv:
         enable: true
         source: mu_energy_balance

@@ -395,3 +395,63 @@ def test_initial_state_uses_predecessor_and_omitted_zero_columns():
     initialize_storage(n, ref, ref.snapshots[2])
     assert n.stores.at["seasonal", "e_initial"] == 2
     assert not n.stores.e_cyclic.any()
+
+
+def test_initial_gas_fraction_carries_stock_without_resetting_each_window():
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=8, freq="h"))
+    ref.add("Carrier", "gas")
+    ref.add("Bus", "DK gas", carrier="gas", country="DK")
+    ref.add("Load", "demand", bus="DK gas", p_set=0.5)
+    ref.add("Store", "DK gas storage", bus="DK gas", carrier="gas",
+            e_nom=10, e_initial=10, e_cyclic=False, marginal_cost=1)
+    solve(ref)
+    n = ref.copy()
+    reports = run(n, ref, options={"storage": {
+        "msv": {"enable": False},
+        "initial_inventory": [{"countries": ["DK"], "carriers": ["gas"],
+                               "start_month_day": "07-01", "fill_fraction": 0.6,
+                               "basis": "Test initial stock"}],
+    }})
+    assert n.stores.at["DK gas storage", "e_initial"] == pytest.approx(6)
+    assert n.stores_t.e["DK gas storage"].iloc[-1] == pytest.approx(2)
+    assert reports["window_summary"].implemented_hours.sum() == 8
+    assert n.meta["initial_inventory_overrides"][0]["initial_MWh"] == 6
+
+
+def test_initial_inventory_selects_only_requested_country_and_carrier():
+    from scripts.disruption_storage_msv import initialize_storage
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=2, freq="h"))
+    for name, country, carrier in [("DK gas", "DK", "gas"), ("DE gas", "DE", "gas"),
+                                   ("DK heat", "DK", "urban central water pits")]:
+        ref.add("Bus", name, country=country)
+        ref.add("Store", name, bus=name, carrier=carrier, e_nom=10, e_initial=3)
+    n = ref.copy()
+    rule = {"countries": ["DK"], "carriers": ["gas"], "fill_fraction": 0.6,
+            "start_month_day": "07-01", "basis": "Test July target"}
+    initialize_storage(n, ref, ref.snapshots[0], {"initial_inventory": [rule]})
+    assert n.stores.e_initial.to_dict() == {"DK gas": 6, "DE gas": 3, "DK heat": 3}
+    assert ref.stores.e_initial.eq(3).all()
+    with pytest.raises(ValueError, match="reference start"):
+        initialize_storage(n, ref, ref.snapshots[1], {"initial_inventory": [rule]})
+    for fraction in [-0.1, 1.1, float("nan"), True]:
+        with pytest.raises(ValueError, match="fill_fraction"):
+            initialize_storage(n, ref, ref.snapshots[0], {
+                "initial_inventory": [{**rule, "fill_fraction": fraction}],
+            })
+    with pytest.raises(ValueError, match="start_month_day"):
+        initialize_storage(n, ref, ref.snapshots[0], {
+            "initial_inventory": [{**rule, "start_month_day": "08-01"}],
+        })
+
+
+def test_consolidated_dispatch_enforces_fuel_caps_and_labels_gas_target():
+    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    rolling = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]
+    assert rolling["resources"]["enforce_allowances"] is True
+    rule, = rolling["storage"]["initial_inventory"]
+    assert rule["countries"] == ["DK"]
+    assert rule["carriers"] == ["gas"]
+    assert rule["fill_fraction"] == 0.6
+    assert "target" in rule["basis"]

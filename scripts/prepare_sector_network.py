@@ -7493,9 +7493,12 @@ if __name__ == "__main__":
             apply_existing_chp_and_heat_capacities(
                 n, snakemake.input.existing_chp_heat_capacities, **existing_kwargs
             )
-            apply_existing_rural_decentral_heat_capacities(
-                n, snakemake.input.existing_rural_decentral_heat_capacities, **existing_kwargs
-            )
+            if existing.get("apply_rural_decentral_heat", True):
+                apply_existing_rural_decentral_heat_capacities(
+                    n, snakemake.input.existing_rural_decentral_heat_capacities, **existing_kwargs
+                )
+            else:
+                logger.info("Skipping existing rural/decentral heat capacity minimums.")
         if options["electricity_distribution_grid"]:
             apply_existing_solar_rooftop_capacities(
                 n, snakemake.input.existing_solar_rooftop_capacities, **existing_kwargs

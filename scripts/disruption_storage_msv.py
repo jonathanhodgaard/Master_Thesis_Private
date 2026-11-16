@@ -122,7 +122,58 @@ def add_msv_charging_credit(n, snapshots, values):
     n.model.objective -= (charging * coefficients).sum()
 
 
-def initialize_storage(n, reference, start):
+def apply_initial_inventory(n, reference, start, rules):
+    """Set explicitly sourced starting inventories, never recurring minimum stocks.
+
+    Fractions use frozen Store capacity. A common fraction at several facilities
+    is a regional allocation assumption, not facility-level observed inventory.
+    Interior starts need a carried rolling state, not a fresh July endowment.
+    """
+    if not rules:
+        return
+    if start != reference.snapshots[0]:
+        raise ValueError("Initial inventory overrides require a simulation starting at the reference start; use carried rolling stocks for interior starts.")
+    records, selected = [], set()
+    for rule in rules:
+        fraction = rule["fill_fraction"]
+        if isinstance(fraction, bool) or not isinstance(fraction, (int, float)) or not np.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError("Initial inventory fill_fraction must be finite and between zero and one.")
+        basis = rule.get("basis", "")
+        if not isinstance(basis, str) or not basis.strip():
+            raise ValueError("Initial inventory overrides require a documented basis.")
+        if rule.get("start_month_day") != start.strftime("%m-%d"):
+            raise ValueError("Initial inventory date does not match the configured start_month_day.")
+        countries = rule.get("countries", [])
+        carriers = rule.get("carriers", [])
+        if not countries or not carriers:
+            raise ValueError("Initial inventory overrides require countries and carriers.")
+        if set(carriers).intersection(ACCOUNTING_CARRIERS):
+            raise ValueError("Physical initial inventory overrides cannot target accounting stores.")
+        stores = n.stores
+        country = stores.bus.map(n.buses.country)
+        names = stores.index[stores.carrier.isin(carriers) & country.isin(countries)]
+        if names.empty:
+            raise ValueError("Initial inventory override matched no stores.")
+        for name in names:
+            if name in selected:
+                raise ValueError(f"Overlapping initial inventory overrides: {name}")
+            row = stores.loc[name]
+            if row.e_nom_extendable or not np.isfinite(row.e_nom) or row.e_nom < 0:
+                raise ValueError(f"Initial inventories require finite fixed storage capacities: {name}")
+            selected.add(name)
+            records.append({"asset": name, "country": str(country[name]),
+                            "carrier": str(row.carrier), "capacity_MWh": float(row.e_nom),
+                            "previous_initial_MWh": float(row.e_initial),
+                            "initial_MWh": float(fraction * row.e_nom),
+                            "fill_fraction": float(fraction), "start": str(start),
+                            "basis": basis})
+    # Validate all selections before mutating the inventory.
+    for record in records:
+        n.stores.at[record["asset"], "e_initial"] = record["initial_MWh"]
+    n.meta = {**n.meta, "initial_inventory_overrides": records}
+
+
+def initialize_storage(n, reference, start, options=None):
     """Use the predecessor state; wrap only originally cyclic reference assets."""
     position = reference.snapshots.get_loc(start)
     hvc = set(n.meta.get("rolling_waste_hvc", {}).get("stores", []))
@@ -147,6 +198,7 @@ def initialize_storage(n, reference, start):
                 raise ValueError(f"Nonfinite initial state for {component} {name}.")
             table.at[name, initial] = value
         table[cyclic] = False
+    apply_initial_inventory(n, reference, start, (options or {}).get("initial_inventory", []))
 
 
 def carry_storage(n, snapshot):

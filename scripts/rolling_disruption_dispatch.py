@@ -91,7 +91,7 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     if not unsupported.empty:
         raise ValueError(f"Annual global budgets without a rolling adapter: {unsupported.index.tolist()}")
     values, original_costs = apply_reference_msv(n, reference, msv_options)
-    initialize_storage(n, reference, snapshots[0])
+    initialize_storage(n, reference, snapshots[0], options.get("storage", {}))
     clear_future_results(n, snapshots[0])
     initial_states = {component: n.components[component].static[attr].copy()
                       for component, attr in (("Store", "e_initial"), ("StorageUnit", "state_of_charge_initial"))}

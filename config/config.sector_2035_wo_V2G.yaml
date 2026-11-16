@@ -83,6 +83,7 @@ sector:
     GB: {2025: 0.069, 2035: 0.469}
   # Existing capacities from data/existing_infrastructure (added ourselves). If missing: applied in every year.
   existing_infrastructure:
+    apply_rural_decentral_heat: false # Optimise 2035 household capacities and heating shares.
     apply_in_years: [2035] # Retain the CSV capacities as minimums in 2035
     keep_extendable: true # p_nom_min = existing capacity, solver may build more
     chp_heat_capacities: data/existing_infrastructure/existing_chp_heat_capacities.csv
