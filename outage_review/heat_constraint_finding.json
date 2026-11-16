@@ -1,0 +1,11 @@
+{
+  "shortage_hours": 19,
+  "heat_vent_capacity_MWth": 0.007130192799229353,
+  "all_shortage_hours_vent_saturated": true,
+  "all_shortage_hours_both_heat_chargers_saturated": true,
+  "biomass_CHP_electrical_capacity_MW": 1168.748,
+  "unused_electrical_capacity_at_all_shortage_hours_MW": 724.9028633982497,
+  "most_negative_heat_shadow_price_EUR_per_MWh": -5536.585216750083,
+  "interpretation": "Electricity shortfalls coincide with a binding coproduct-heat rejection bottleneck; assess physical CHP heat-rejection/condensing capabilities before interpreting unserved energy as electrical capacity inadequacy.",
+  "verification_limit": "No counterfactual dispatch with revised heat-rejection capability has been solved."
+}

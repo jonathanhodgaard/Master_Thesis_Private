@@ -57,6 +57,10 @@ from scripts.household_heat_constraints import (
     save_household_heat_shares,
 )
 from scripts.resource_budget_duals import save_resource_budget_duals
+from scripts.heat_vent_capacity import (
+    add_heat_vent_capacity_constraints,
+    prepare_heat_vent_capacity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1312,6 +1316,7 @@ def extra_functionality(
         add_import_limit_constraint(n, snapshots)
     
     add_household_heat_constraints(n, snapshots)
+    add_heat_vent_capacity_constraints(n)
 
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
@@ -1533,6 +1538,8 @@ if __name__ == "__main__":
     
     # prepare household heat network before solving
     prepare_household_heat_network(n, snakemake.config)
+    # Disposal is sized from installed heat-input capacity, not baseline usage.
+    prepare_heat_vent_capacity(n, investment=True)
 
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)

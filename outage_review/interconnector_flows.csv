@@ -1,0 +1,16 @@
+component,asset,period,max_abs_flow_MW,net_import_MWh
+Line,4,before,2055.4346150296324,270971.5957137437
+Line,4,outage,0.0,-0.0
+Line,4,after,2055.4346150296324,182357.80989982816
+Link,relation/2505320-400-DC,before,600.0,-78159.13071286624
+Link,relation/2505320-400-DC,outage,0.0,-0.0
+Link,relation/2505320-400-DC,after,600.0,-73276.09698863149
+Link,relation/5487095-400-DC,before,585.6070121572085,12930.027442004182
+Link,relation/5487095-400-DC,outage,0.0,-0.0
+Link,relation/5487095-400-DC,after,585.6070121572085,19338.135729596142
+Link,relation/2505320-400-DC-reversed,before,580.8229267876665,9883.082702758727
+Link,relation/2505320-400-DC-reversed,outage,0.0,-0.0
+Link,relation/2505320-400-DC-reversed,after,580.8229267876665,15948.384041608038
+Link,relation/5487095-400-DC-reversed,before,600.0,-72297.61053658609
+Link,relation/5487095-400-DC-reversed,outage,0.0,-0.0
+Link,relation/5487095-400-DC-reversed,after,600.0,-74838.95184172882

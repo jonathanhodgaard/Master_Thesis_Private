@@ -76,6 +76,8 @@ compatible tank templates and disabled residential building DSM. Dispatch subseq
 - Donor networks transfer operating inputs (loads, renewable availability, inflows, temperature-dependent efficiencies and other availability series) by asset name. Base equipment/capacities and date labels are retained. Calendar hours and snapshot weights must match; remove leap days consistently.
 - Fuel backup Links provide parallel **delivery capacity**, still consuming upstream fuel. They do not create an independent emergency fuel stock. Their configured premium is added to the original delivery cost.
 - Electricity/heat shedding is limited by instantaneous demand, including allocated household heat. The consolidated dispatch config prices electricity at EUR 10,000/MWh and heat at EUR 20,000/MWh.
+- Enabled heat vents are disposal-only accounting Generators, sized by `scripts/heat_vent_capacity.py` to the combined maximum heat-input power capacity at their bus, independently of demand. CHP heat-output ports, boilers, heat pumps (including reverse-operated bus0 pumps), solar thermal and storage-discharge Links are included; venting, load shedding, heat consumers and Store MWh ratings are excluded. Multiple ports at the same bus are netted before computing maximum positive output. Existing vent-area switches and household topology are preserved.
+- In the base solve, a linear equality ties each heat vent's nominal capacity to installed fixed/extendable source capacities. This prevents a small baseline disposal flow from becoming the future vent rating. Dispatch preparation recalculates fixed vent ratings after capacity freezing and weather transfer, also repairing older reference networks in memory. Venting retains its operating penalty and has no investment cost. This treats heat rejection as generally available accounting disposal, not a detailed model of each CHP's cooling/condensing equipment.
 - Rolling dispatch requires consecutive, unit-weight hourly snapshots, a successfully solved matching reference and continuous dispatch. Unit commitment and finite aggregate green-import budgets are currently rejected.
 - Selected storage MSVs come from reference `mu_energy_balance` duals, using hourly values or annual means by carrier. The consolidated config uses hourly physical-storage values and annual fuel values. Accounting stores are excluded. Reference fuel-budget duals must also be present when scarcity pricing is enabled; regenerate the matching base if absent.
 - Resource allowances are **price-only by default** in the supplied disruption overlays (`enforce_allowances: false`): usage/exceedance is reported but an annual cap is not enforced unless enabled globally or by carrier.
@@ -232,5 +234,8 @@ disruption preparation, annual resource-budget duals and rolling dispatch:
 `test_interconnector_disruption.py` additionally checks outage calendar/name validation, preserved
 weather profiles and capacities, NetCDF round-tripping, rejection of meshed AC outages, and actual
 import/export interruption and restoration in both full-horizon and overlapping rolling dispatch.
+`test_heat_vent_capacity.py` checks thermal-output units, independent sizing from demand/shedding,
+reverse heat pumps and multi-port accounting, and CHP heat disposal in planning, fixed dispatch
+and rolling dispatch, including saved-base capacity freezing.
 This documentation update was checked against source and Git differences; it does not establish that
 these tests or full solver/weather workflows were executed successfully.

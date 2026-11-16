@@ -74,6 +74,10 @@ on Sophia). It includes a baseline and a configurable Eastern Denmark interconne
 Submit `run_dispatch_2025_outage_summer_3weeks.sbatch` to run only `eastern_denmark_outage` from that
 single file. The current summer test covers 1-22 July 2013, with an outage on 8-15 July.
 
+Enabled heat-disposal sinks are sized from the combined heat-input capacity at each bus, rather
+than heat demand or baseline vent usage. The rating follows capacity expansion in base solves
+and is refreshed from frozen capacities when preparing disruption dispatch from older bases.
+
 # Warnings
 
 PyPSA-Eur is under active development and has several

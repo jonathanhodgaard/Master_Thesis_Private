@@ -83,7 +83,7 @@ sector:
     GB: {2025: 0.069, 2035: 0.469}
   # Existing capacities from data/existing_infrastructure (added ourselves). If missing: applied in every year.
   existing_infrastructure:
-    apply_in_years: [2025] # NOT applied in 2035, otherwise the 2025 capacities become a minimum
+    apply_in_years: [2035] # NOT applied in 2035, otherwise the 2025 capacities become a minimum
     keep_extendable: true # p_nom_min = existing capacity, solver may build more
     chp_heat_capacities: data/existing_infrastructure/existing_chp_heat_capacities.csv
     rural_decentral_heat_capacities: data/existing_infrastructure/existing_rural_decentral_heat_capacities.csv
