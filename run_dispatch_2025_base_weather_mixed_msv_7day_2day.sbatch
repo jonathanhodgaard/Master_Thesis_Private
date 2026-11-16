@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dispatch_2025_disruptions
+#SBATCH --job-name=dispatch_2025_outage
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -26,22 +26,25 @@ test -f config/config.sophia.yaml
 
 # The single dispatch config selects reference inputs, cases and rolling settings.
 # Fail before scheduling jobs if an external solved input is missing.
-python - <<'PY'
+dispatch_target=$(python - <<'PY'
 from pathlib import Path
 import yaml
 
 with open("config/config.disruption_dispatch.yaml", encoding="utf-8") as stream:
     disruption = yaml.safe_load(stream)["disruption"]
-inputs = [disruption["base_network"], disruption.get("household_shares")]
-inputs += [case.get("weather_network") for case in disruption["cases"].values()]
+case = "eastern_denmark_outage"
+inputs = [disruption["base_network"], disruption.get("household_shares"),
+          disruption["cases"][case].get("weather_network")]
 for name in inputs:
     if name and not Path(name).is_file():
         raise FileNotFoundError(f"Required prepared/solved input is missing: {name}")
+print(f"{disruption['output_directory'].rstrip('/')}/{case}/network_solved.nc")
 PY
+)
 
-# Run every configured case, including the baseline and interconnector outage.
+# Run only the outage case, using the configured simulation period.
 # Restrict rules so external inputs cannot trigger investment/weather builds.
-snakemake dispatch_disruptions \
+snakemake "$dispatch_target" \
   --executor local \
   --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch \
   --configfiles config/config.sector_2025.yaml \

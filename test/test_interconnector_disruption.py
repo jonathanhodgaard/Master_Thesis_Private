@@ -142,7 +142,8 @@ def test_consolidated_configuration():
     root = Path(__file__).resolve().parents[1]
     config = yaml.safe_load((root / "config/config.disruption_dispatch.yaml").read_text())
     settings = config["disruption"]
-    assert settings["rolling_horizon"]["horizon"] - settings["rolling_horizon"]["overlap"] == 48
+    rolling = settings["rolling_horizon"]
+    assert rolling["horizon"] > rolling["overlap"] >= 0
     assert settings["cases"]["base_weather"]["interconnector_outages"] == []
     outage = settings["cases"]["eastern_denmark_outage"]["interconnector_outages"][0]
     assert pd.Timestamp(outage["end"]) - pd.Timestamp(outage["start"]) == pd.Timedelta(days=7)

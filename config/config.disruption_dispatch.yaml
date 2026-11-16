@@ -8,15 +8,15 @@ disruption:
   base_network: results/sector_2025/networks/base_s_10___2025.nc
   household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
   planning_horizon: 2025
-  output_directory: results/disruptions/sector_2025_dispatch
+  output_directory: results/disruptions/sector_2025_dispatch_summer_3weeks
   iis_time_limit: 300
 
   rolling_horizon:
     horizon: 168 # Hourly snapshots: seven-day look-ahead.
-    overlap: 48 # Implement horizon - overlap = 48 hours each solve.
+    overlap: 48 # Implement horizon - overlap = 120 hours each solve.
     simulation:
-      start: null
-      end: null # Exclusive; null runs the complete network calendar.
+      start: "2013-07-01 00:00"
+      end: "2013-07-22 00:00" # Exclusive: three summer weeks (504 hours).
     resources:
       apply_scarcity_prices: true
       enforce_allowances: false
@@ -82,11 +82,11 @@ disruption:
       weather_network: null
       interconnector_outages:
         - name: eastern_denmark_isolation
-          # Example seven-day outage. Change these dates for the experiment.
+          # Middle week of the three-week summer simulation (168 hours).
           # Base-network calendar is July 2013-June 2014, not planning year 2025.
           # Start inclusive; end exclusive; timestamps use the model's time basis.
-          start: "2014-01-10 00:00"
-          end: "2014-01-17 00:00"
+          start: "2013-07-08 00:00"
+          end: "2013-07-15 00:00"
           lines: ["4"] # DK0 0AC (Eastern Denmark) - SE0 0AC.
           links: # Include both directional representations.
             - relation/2505320-400-DC

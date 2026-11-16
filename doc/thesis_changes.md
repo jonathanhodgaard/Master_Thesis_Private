@@ -143,12 +143,16 @@ through `disruption.cases.<case>.weather_network`. Update all target paths after
 clustering, scenario options or planning horizons. For SOPHIA, insert `config/config.sophia.yaml`
 between sector and disruption configurations.
 
-For the consolidated Sophia run, submit `run_dispatch_2025_base_weather_mixed_msv_7day_2day.sbatch`.
-Despite its historical filename, this launcher now uses only the separate sector/Sophia files and
-`config/config.disruption_dispatch.yaml`, and targets every configured case rather than only
-`base_weather`. Edit the single dispatch file to change rolling settings, low-voltage multipliers,
-weather donors, outage asset lists or dates. The supplied outage dates (10-17 January 2014) are an
-example experiment. Use a new `output_directory` to preserve results from a different experiment.
+For the three-week summer Sophia test, submit `run_dispatch_2025_outage_summer_3weeks.sbatch`.
+This launcher uses only the separate sector/Sophia files and
+`config/config.disruption_dispatch.yaml`, and targets only `eastern_denmark_outage` for testing.
+The `dispatch_disruptions` aggregate target still runs all configured cases.
+Edit the single dispatch file to change rolling settings, low-voltage multipliers,
+weather donors, outage asset lists or dates. The current simulation covers 1-22 July 2013, with
+the outage on 8-15 July (exclusive end dates): one week before, during and after the outage.
+The preserved `horizon: 168` / `overlap: 48` settings implement 120 hours per solve.
+Results go to `results/disruptions/sector_2025_dispatch_summer_3weeks`; use a new
+`output_directory` to preserve results from a different experiment.
 Historical overlay files and their other launchers remain available for reproducing older trials;
 do not append those overlays to the consolidated run. For another planning scenario, change the
 separate sector config and match `base_network`, `household_shares`, `planning_horizon`, asset names

@@ -71,8 +71,8 @@ compatibility fixes, and companion data-preparation scripts. Notebooks are exclu
 New rolling/disruption runs use **`config/config.disruption_dispatch.yaml`** for all dispatch
 settings and cases, loaded after the separate sector configuration (and `config/config.sophia.yaml`
 on Sophia). It includes a baseline and a configurable Eastern Denmark interconnector outage.
-The updated `run_dispatch_2025_base_weather_mixed_msv_7day_2day.sbatch` runs all cases from that
-single file; its example outage dates use the network's 2013/2014 calendar.
+Submit `run_dispatch_2025_outage_summer_3weeks.sbatch` to run only `eastern_denmark_outage` from that
+single file. The current summer test covers 1-22 July 2013, with an outage on 8-15 July.
 
 # Warnings
 
