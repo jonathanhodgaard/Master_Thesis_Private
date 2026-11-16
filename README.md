@@ -68,11 +68,17 @@ See **[Thesis changes, scripts, workflow rules and usage](doc/thesis_changes.md)
 with the release, new and modified scripts/rules, scenario configurations, inputs, reports,
 compatibility fixes, and companion data-preparation scripts. Notebooks are excluded.
 
-New rolling/disruption runs use **`config/config.disruption_dispatch.yaml`** for all dispatch
+New rolling/disruption runs use **`config/config.interconnector_disruption.yaml`** for all dispatch
 settings and cases, loaded after the separate sector configuration (and `config/config.sophia.yaml`
-on Sophia). It includes a baseline and a configurable Eastern Denmark interconnector outage.
-Submit `run_dispatch_2025_outage_summer_3weeks.sbatch` to run only `eastern_denmark_outage` from that
-single file. The current summer test covers 1-22 July 2013, with an outage on 8-15 July.
+on Sophia). It includes a matching baseline, single/combined winter interconnector outages,
+and an Eastern Denmark electrical-isolation case. Current settings use a 168-hour horizon,
+48-hour overlap (**120 hours implemented**), 168-hour waste periods, and fixed distribution-grid
+increases of 15% in Finland and 2% in Sweden. Existing heat vents are resized during preparation.
+Submit `sbatch run_dispatch_2025.sbatch` for all configured cases, or
+`sbatch --export=ALL,DISRUPTION_CASE=se_interconnector run_dispatch_2025.sbatch` for one case.
+The full reference year is simulated; outage start/end dates only control connection availability.
+Results go to `results/disruptions/sector_2025_dispatch`. Historical overlays remain for older
+experiments and should not be appended to this consolidated configuration.
 
 Enabled heat-disposal sinks are sized from the combined heat-input capacity at each bus, rather
 than heat demand or baseline vent usage. The rating follows capacity expansion in base solves

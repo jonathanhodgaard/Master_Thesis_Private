@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network, _clone
-from scripts.heat_vent_capacity import prepare_heat_vent_capacity
+from scripts.heat_vent_capacity import prepare_dispatch_heat_vent_capacity
 
 
 CAPACITIES = {
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     add_fuel_backup_links(n, dict(snakemake.params.fuel_backup))
     # Refresh accounting sinks after freezing capacities and transferring weather.
     # Also repairs old references whose optimized vent size reflected baseline use.
-    prepare_heat_vent_capacity(n)
+    prepare_dispatch_heat_vent_capacity(n, snakemake.params.get("heat_vent", {}))
     add_load_shedding(n, **dict(snakemake.params.load_shedding))
     assert_fixed_capacities(n)
     n.meta = {**n.meta, "disruption_preparation": {

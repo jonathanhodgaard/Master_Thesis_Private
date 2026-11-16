@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dispatch_2025_outage
+#SBATCH --job-name=dispatch_2025
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -28,28 +28,32 @@ test -f config/config.sophia.yaml
 # Fail before scheduling jobs if an external solved input is missing.
 dispatch_target=$(python - <<'PY'
 from pathlib import Path
+import os
 import yaml
 
-with open("config/config.disruption_dispatch.yaml", encoding="utf-8") as stream:
+with open("config/config.interconnector_disruption.yaml", encoding="utf-8") as stream:
     disruption = yaml.safe_load(stream)["disruption"]
-case = "eastern_denmark_outage"
-inputs = [disruption["base_network"], disruption.get("household_shares"),
-          disruption["cases"][case].get("weather_network")]
+case = os.environ.get("DISRUPTION_CASE")
+if case and case not in disruption["cases"]:
+    raise ValueError(f"Unknown DISRUPTION_CASE {case!r}; choose from {list(disruption['cases'])}")
+selected = [case] if case else list(disruption["cases"])
+inputs = [disruption["base_network"], disruption.get("household_shares")]
+inputs += [disruption["cases"][name].get("weather_network") for name in selected]
 for name in inputs:
     if name and not Path(name).is_file():
         raise FileNotFoundError(f"Required prepared/solved input is missing: {name}")
-print(f"{disruption['output_directory'].rstrip('/')}/{case}/network_solved.nc")
+print(f"{disruption['output_directory'].rstrip('/')}/{case}/network_solved.nc" if case else "dispatch_disruptions")
 PY
 )
 
-# Run only the outage case, using the configured simulation period.
+# Run all configured cases, or select one with DISRUPTION_CASE=se_interconnector.
 # Restrict rules so external inputs cannot trigger investment/weather builds.
 snakemake "$dispatch_target" \
   --executor local \
   --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch \
   --configfiles config/config.sector_2025.yaml \
                 config/config.sophia.yaml \
-                config/config.disruption_dispatch.yaml \
+                config/config.interconnector_disruption.yaml \
   --cores "$SLURM_CPUS_PER_TASK" \
   --resources mem_mb=64000 \
   --default-resources "tmpdir=$TMPDIR" \

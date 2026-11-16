@@ -199,7 +199,7 @@ def test_configured_fuel_msv_prices_opening_stocks_against_new_supply():
     # A synthetic reference value distinguishes opening-stock opportunity cost
     # from its original handling cost, using all reference hours for the mean.
     ref.stores_t.mu_energy_balance.loc[:, fuels] = np.array([10, 30, 50])[:, None]
-    path = Path(__file__).resolve().parents[1] / "config/config.disruption_dispatch_2025.yaml"
+    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
     msv = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]["msv"]
     n = ref.copy()
     reports = run(n, ref, options={"horizon": 2, "overlap": 1, "storage": {"msv": msv}})

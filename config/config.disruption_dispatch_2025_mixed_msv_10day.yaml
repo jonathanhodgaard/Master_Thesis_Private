@@ -1,7 +1,0 @@
-# Load after config.disruption_dispatch_2025_mixed_msv.yaml.
-# Change only look-ahead and output location; retain four-day implementation.
-disruption:
-  output_directory: results/disruptions/sector_2025_rolling_mixed_msv_10day
-  rolling_horizon:
-    horizon: 240
-    overlap: 144 # Implement horizon - overlap = 96 hours.

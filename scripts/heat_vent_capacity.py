@@ -6,6 +6,19 @@ import pandas as pd
 META_KEY = "heat_vent_capacity"
 
 
+def prepare_dispatch_heat_vent_capacity(n, options=None):
+    """Apply the dispatch switch without retaining reference investment constraints."""
+    enabled = (options or {}).get("resize_to_heat_input_capacity", True)
+    if not isinstance(enabled, bool):
+        raise ValueError("Heat-vent resize_to_heat_input_capacity must be true or false.")
+    if enabled:
+        prepare_heat_vent_capacity(n)
+    else:
+        n.meta = {**(n.meta or {}), META_KEY: {
+            "mode": "dispatch_preserved", "basis": "reference capacities; resizing disabled",
+        }}
+
+
 def heat_capacity_sources(n, buses):
     """Return MW_heat per nominal MW for every heat-injecting component.
 

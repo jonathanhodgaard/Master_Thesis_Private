@@ -111,7 +111,7 @@ Rolling runs additionally create per-window solver logs; failed Gurobi solves ma
 | `config/config.sector_2035_w_V2G.yaml`, `config/config.sector_2035_wo_V2G.yaml` | 2035 overnight comparisons with EV DSM enabled and V2G respectively enabled/disabled. Existing CSV overlays are restricted to 2025; separately configured 2035 capacity-fixing settings still apply. |
 | `config/config.weather_1965_66.yaml` | Prepare an alternative July 1965-June 1966 weather donor, separate resource prefix, historical ERA5 cutout, leap-day removal and fixed reference nuclear availability. |
 | `config/config.disruption_dispatch_2025.yaml` | Matching 2025 disruption overlay. Currently enables `base_weather`, uses a 120-hour window / 24-hour overlap and no simulation cutoff. The historical-weather case is commented out. |
-| `config/config.disruption_dispatch.yaml` | Recommended single dispatch configuration: seven-day look-ahead, two-day implementation, mixed hourly/annual storage values, 96-hour waste buffer, baseline and an example seven-day Eastern Denmark isolation. Replaces the stack of rolling/disruption overlays for new runs; sector and Sophia configurations stay separate. |
+| `config/config.interconnector_disruption.yaml` | Main dispatch configuration: 168-hour look-ahead, 48-hour overlap (120-hour implementation), mixed hourly/annual storage values, 168-hour waste periods/buffer, FI/SE distribution multipliers of 1.15/1.02, refreshed heat vents, baseline and dated interconnector cases. Replaces the historical rolling/disruption overlay stack; sector and Sophia configurations remain separate. |
 | `config/config.disruption_dispatch_2035_w_V2G.yaml`, `config/config.disruption_dispatch_2035_wo_V2G.yaml` | Matching 2035 disruption overlays; currently use 48-hour windows / 24-hour overlap and an exclusive `2013-07-15` cutoff for initial testing. |
 | `config/config.sophia.yaml` | SOPHIA solver-directory override. |
 | `config/config.scenario.default.yaml` | Draft scenario/network template with a placeholder network path; not a ready-to-run disruption overlay. |
@@ -137,7 +137,7 @@ require the prepared donor. Load the sector configuration first and disruption o
 Use the restricted rule list so missing or stale external inputs cannot schedule capacity expansion or donor preparation:
 
 ```bash
-snakemake dispatch_disruptions --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch --configfiles config/config.sector_2025.yaml config/config.disruption_dispatch.yaml --cores 8
+snakemake dispatch_disruptions --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch --configfiles config/config.sector_2025.yaml config/config.interconnector_disruption.yaml --cores 8
 ```
 
 Do not load the historical-weather preparation overlay into this dispatch command; select the donor
@@ -145,16 +145,30 @@ through `disruption.cases.<case>.weather_network`. Update all target paths after
 clustering, scenario options or planning horizons. For SOPHIA, insert `config/config.sophia.yaml`
 between sector and disruption configurations.
 
-For the three-week summer Sophia test, submit `run_dispatch_2025_outage_summer_3weeks.sbatch`.
-This launcher uses only the separate sector/Sophia files and
-`config/config.disruption_dispatch.yaml`, and targets only `eastern_denmark_outage` for testing.
-The `dispatch_disruptions` aggregate target still runs all configured cases.
-Edit the single dispatch file to change rolling settings, low-voltage multipliers,
-weather donors, outage asset lists or dates. The current simulation covers 1-22 July 2013, with
-the outage on 8-15 July (exclusive end dates): one week before, during and after the outage.
-The preserved `horizon: 168` / `overlap: 48` settings implement 120 hours per solve.
-Results go to `results/disruptions/sector_2025_dispatch_summer_3weeks`; use a new
-`output_directory` to preserve results from a different experiment.
+Submit `sbatch run_dispatch_2025.sbatch` on Sophia for every configured case, including the
+matching `base_weather` control. To run one case, use
+`sbatch --export=ALL,DISRUPTION_CASE=se_interconnector run_dispatch_2025.sbatch`.
+This launcher loads only the sector/Sophia files and the main dispatch config, checks external
+inputs, and restricts the workflow to preparation, outages and dispatch. It does not build capacity
+or donor-weather networks. Earlier experiment launchers and overlays have been removed from the
+working tree; use Git history when reconstructing those historical experiments.
+
+Edit the main file to change rolling settings, low-voltage multipliers, heat-vent resizing,
+weather donors, outage assets or dates. The full July 2013-June 2014 reference year is simulated.
+Single interconnector outages cover December-January; paired outages cover December-February;
+`eastern_denmark_all` isolates all electrical connections during December-February. End dates are exclusive.
+These intentionally different event lengths are preserved, so they should not be interpreted as
+equal-duration sensitivity cases. Gas connections remain available during electrical isolation.
+`horizon: 168` / `overlap: 48` implements 120 hours per solve; waste deadlines remain on independent
+168-hour calendar blocks. Results go to `results/disruptions/sector_2025_dispatch`; change
+`output_directory` to preserve another experiment. Shedding costs are 23,300 EUR/MWh electricity
+and 100,000 EUR/MWh heat, applied across all countries. Resource allowances remain price-only.
+
+Preparation freezes capacities and heat shares, transfers any donor inputs, scales both directions
+of the selected distribution links, prepares waste arrivals and fuel backup links, refreshes enabled
+heat vents, then adds shedding. Outages are applied afterward, so the adjusted grid/vent capacities
+are retained in both the baseline and disrupted networks. Heat-vent resizing only affects existing
+enabled vents and keeps their disposal penalties; it does not create vents in disabled heat areas.
 Historical overlay files and their other launchers remain available for reproducing older trials;
 do not append those overlays to the consolidated run. For another planning scenario, change the
 separate sector config and match `base_network`, `household_shares`, `planning_horizon`, asset names

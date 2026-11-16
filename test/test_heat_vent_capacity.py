@@ -95,6 +95,19 @@ def test_nonfinite_heat_output_profile_is_rejected():
     assert n.generators.at["heat vent", "p_nom"] == 0.007
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+def test_dispatch_resize_switch_replaces_reference_planning_metadata(enabled):
+    from scripts.heat_vent_capacity import prepare_dispatch_heat_vent_capacity
+    n = network()
+    n.add("Link", "boiler", bus0="fuel", bus1="heat", p_nom=10, efficiency=.9)
+    n.meta[META_KEY] = {"mode": "investment", "vents": {}}
+    prepare_dispatch_heat_vent_capacity(n, {"resize_to_heat_input_capacity": enabled})
+    assert n.generators.at["heat vent", "p_nom"] == pytest.approx(9 if enabled else .007)
+    assert n.meta[META_KEY]["mode"] == ("dispatch" if enabled else "dispatch_preserved")
+    # A dispatch copy must never rebuild the reference investment equations.
+    add_heat_vent_capacity_constraints(n)
+
+
 @pytest.mark.parametrize("mode", ["investment", "dispatch", "rolling"])
 def test_chp_can_supply_electricity_with_zero_heat_demand(mode, tmp_path):
     n = network()

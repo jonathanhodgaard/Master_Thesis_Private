@@ -140,14 +140,51 @@ def test_actual_flows_stop_and_recover_across_rolling_boundaries(rolling, direct
 
 def test_consolidated_configuration():
     root = Path(__file__).resolve().parents[1]
-    config = yaml.safe_load((root / "config/config.disruption_dispatch.yaml").read_text())
+    config = yaml.safe_load((root / "config/config.interconnector_disruption.yaml").read_text())
     settings = config["disruption"]
     rolling = settings["rolling_horizon"]
     assert rolling["horizon"] > rolling["overlap"] >= 0
     assert settings["cases"]["base_weather"]["interconnector_outages"] == []
-    outage = settings["cases"]["eastern_denmark_outage"]["interconnector_outages"][0]
-    assert pd.Timestamp(outage["end"]) - pd.Timestamp(outage["start"]) == pd.Timedelta(days=7)
-    assert outage["lines"] == ["4"]
-    for name in outage["links"]:
-        counterpart = name.removesuffix("-reversed") if name.endswith("-reversed") else name + "-reversed"
-        assert counterpart in outage["links"]
+    for case in settings["cases"].values():
+        for outage in case.get("interconnector_outages", []):
+            start, end = pd.Timestamp(outage["start"]), pd.Timestamp(outage["end"])
+            assert start < end
+            assert start == start.floor("h") and end == end.floor("h")
+            assert outage.get("lines") or outage.get("links")
+            assert all(isinstance(name, str) for name in outage.get("lines", []))
+            for name in outage.get("links", []):
+                counterpart = name.removesuffix("-reversed") if name.endswith("-reversed") else name + "-reversed"
+                assert counterpart in outage["links"]
+
+
+def test_distribution_and_heat_vent_adjustments_survive_outage_export(tmp_path):
+    from scripts.prepare_network_disruptions import apply_low_voltage_capacity_multipliers
+    from scripts.heat_vent_capacity import prepare_heat_vent_capacity
+    n = network()
+    for carrier in ("low voltage", "electricity distribution grid", "urban central heat", "urban central heat vent"):
+        n.add("Carrier", carrier)
+    for country in ("FI", "SE"):
+        n.add("Bus", country+" grid", carrier="AC", country=country)
+        n.add("Bus", country+" low voltage", carrier="low voltage", country=country)
+        n.add("Bus", country+" heat", carrier="urban central heat", country=country)
+        for suffix,source,destination in ((""," grid"," low voltage"),("-reversed"," low voltage"," grid")):
+            n.add("Link", country+" distribution"+suffix,bus0=country+source,bus1=country+destination,
+                  carrier="electricity distribution grid",p_nom=10,efficiency=.97)
+        n.add("Link", country+" heater",bus0=country+" grid",bus1=country+" heat",p_nom=20,efficiency=.9)
+        n.add("Generator", country+" vent",bus=country+" heat",carrier="urban central heat vent",
+              p_nom=.001,p_min_pu=-1,p_max_pu=0,marginal_cost=-.02)
+    apply_low_voltage_capacity_multipliers(n,{"FI":1.15,"SE":1.02})
+    prepare_heat_vent_capacity(n)
+    apply_interconnector_outages(n,[event(n)])
+    path=tmp_path/"prepared_and_disrupted.nc"
+    n.export_to_netcdf(path)
+    loaded=pypsa.Network(path)
+    for country,capacity in (("FI",11.5),("SE",10.2)):
+        for suffix in ("","-reversed"):
+            assert loaded.links.at[country+" distribution"+suffix,"p_nom"] == pytest.approx(capacity)
+        assert loaded.generators.at[country+" vent","p_nom"] == pytest.approx(18)
+        assert loaded.generators.at[country+" vent","marginal_cost"] == -.02
+    assert len(loaded.meta["low_voltage_capacity_adjustments"]) == 4
+    assert loaded.meta["heat_vent_capacity"]["mode"] == "dispatch"
+    assert loaded.meta["interconnector_outages"][0]["hours"] == 3
+    assert (loaded.links_t.p_max_pu.loc[loaded.snapshots[3:6],"cable"] == 0).all()

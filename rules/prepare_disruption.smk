@@ -27,6 +27,7 @@ rule prepare_disruption_network:
         load_shedding=DISRUPTION["load_shedding"],
         fuel_backup=DISRUPTION.get("fuel_backup", {}),
         low_voltage_capacity_multipliers=DISRUPTION.get("low_voltage_capacity_multipliers", {}),
+        heat_vent=DISRUPTION.get("heat_vent", {}),
         rolling_horizon=config["solving"]["options"].get("rolling_horizon", False),
         rolling=DISRUPTION.get("rolling_horizon", {}),
     script:

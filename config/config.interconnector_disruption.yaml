@@ -1,0 +1,181 @@
+# Load after config.sector_2025.yaml and, on Sophia, config.sophia.yaml.
+# This replaces the stack of disruption/rolling overlays for new runs.
+# The donor weather network must already exist; do not load its build config.
+run:
+  default_target_rule: dispatch_disruptions
+
+disruption:
+  base_network: results/sector_2025/networks/base_s_10___2025.nc
+  household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
+  planning_horizon: 2025
+  output_directory: results/disruptions/sector_2025_dispatch
+  iis_time_limit: 300
+
+  rolling_horizon:
+    horizon: 168 # Hourly snapshots: seven-day look-ahead.
+    overlap: 48 # Implement horizon - overlap = 120 hours each solve.
+    simulation:
+      start: null # Full reference calendar: July 2013-June 2014.
+      end: null # Exclusive cutoff when set; independent of outage dates below.
+    resources:
+      apply_scarcity_prices: true
+      enforce_allowances: false
+      overrides: {}
+    storage:
+      initial_state: base_previous_snapshot
+      msv:
+        enable: true
+        source: mu_energy_balance
+        aggregation: hourly
+        aggregation_by_carrier:
+          gas: annual_mean
+          biomass: annual_mean
+          coal: annual_mean
+          lignite: annual_mean
+          oil: annual_mean
+          methanol: annual_mean
+          H2 Store: annual_mean
+          ammonia store: annual_mean
+        stores:
+          carriers: [urban central water pits, gas, biomass, coal, lignite, oil, methanol, H2 Store, ammonia store]
+          assets: []
+        storage_units:
+          carriers: [hydro]
+          assets: []
+    co2:
+      replace_budget_with_price: true
+    waste_hvc:
+      mode: uniform_arrivals
+      treatment_period_hours: 168
+      backlog_hours: 168
+      initial_backlog_MWh: 0
+      require_empty_at_period_end: true
+
+  # Fixed capacity sensitivity, applied before outages, in both flow directions.
+  # Current expansion settings: Finland +15%, Sweden +2%.
+  low_voltage_capacity_multipliers:
+    FI: 1.15
+    SE: 1.02
+  heat_vent:
+    # Resize existing enabled vents to connected maximum heat-input capacities.
+    # Applies in every case, including Finland and Sweden; retains disposal costs.
+    resize_to_heat_input_capacity: true
+  fuel_backup:
+    enable: true
+    capacity_multiplier: 1.0
+    marginal_cost_premium: 0.1
+    carriers:
+      - land transport oil
+      - gas for industry
+      - coal for industry
+      - solid biomass for industry
+      - industry methanol
+      - kerosene for aviation
+      - shipping oil
+      - shipping methanol
+      - agriculture machinery oil
+  load_shedding:
+    elec_cost: 23300 # DEA VoLL Denmark (2023)
+    heat_cost: 100000 # Gøtske (2024)
+
+  # dispatch_disruptions runs every case listed here with shared settings above.
+  # Each case can combine a prepared donor weather network and multiple outages.
+  cases:
+    # Matching control: same horizon, prices, inventories and capacity adjustments.
+    base_weather:
+      weather_network: null
+      interconnector_outages: []
+
+    # Single-connection winter outages: December through January.
+    se_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: se_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-02-01 00:00"
+          lines: ["4"] # DK0 0AC (Eastern Denmark) - SE0 0AC.
+
+    de_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: de_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-02-01 00:00"
+          links: # Include both directional representations.
+            - relation/2505320-400-DC
+            - relation/2505320-400-DC-reversed
+
+    dk1_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: dk1_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-02-01 00:00"
+          links: # Include both directional representations.
+            - relation/5487095-400-DC
+            - relation/5487095-400-DC-reversed
+
+    # Combined winter outages: December through February.
+    se_de_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: se_de_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-03-01 00:00"
+          lines: ["4"] # DK0 0AC (Eastern Denmark) - SE0 0AC.
+          links: # Include both directional representations.
+            - relation/2505320-400-DC
+            - relation/2505320-400-DC-reversed
+
+    se_dk1_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: se_dk1_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-03-01 00:00"
+          lines: ["4"] # DK0 0AC (Eastern Denmark) - SE0 0AC.
+          links: # Include both directional representations.
+            - relation/5487095-400-DC
+            - relation/5487095-400-DC-reversed
+
+    de_dk1_interconnector:
+      weather_network: null
+      interconnector_outages:
+        - name: de_dk1_interconnector_outage
+          start: "2013-12-01 00:00"
+          end: "2014-03-01 00:00"
+          links: # Include both directional representations.
+            - relation/5487095-400-DC
+            - relation/5487095-400-DC-reversed
+            - relation/2505320-400-DC
+            - relation/2505320-400-DC-reversed
+    # Isolation of all three electrical interconnections; dates are set below.
+    eastern_denmark_all:
+      weather_network: null
+      interconnector_outages:
+        - name: eastern_denmark_isolation
+          # Start inclusive; end exclusive; timestamps use the model's time basis.
+          start: "2013-12-01 00:00"
+          end: "2014-03-01 00:00"
+          lines: ["4"] # DK0 0AC (Eastern Denmark) - SE0 0AC.
+          links: # Include both directional representations.
+            - relation/2505320-400-DC
+            - relation/2505320-400-DC-reversed
+            - relation/5487095-400-DC
+            - relation/5487095-400-DC-reversed
+
+    # historical_weather:
+    #   weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
+    #   interconnector_outages: [] # Or add dated outages as above.
+
+solving:
+  options:
+    rolling_horizon: true # false selects full-horizon dispatch.
+    load_shedding:
+      enable: false # Already supplied by network preparation.
+  solver_options:
+    gurobi-default:
+      BarConvTol: 1.0e-8
+      FeasibilityTol: 1.0e-7
+      OptimalityTol: 1.0e-7
+      crossover: -1
