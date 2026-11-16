@@ -158,12 +158,14 @@ clustering:
 
 solving:
   options:
-    assign_all_duals: true 
+    assign_all_duals: true
   solver:
     name: gurobi
     options: gurobi-default
   solver_options:
     gurobi-default:
       threads: 8
+      BarHomogeneous: 1
+      NumericFocus: 3
   mem_mb: 60000
   runtime: 12h
