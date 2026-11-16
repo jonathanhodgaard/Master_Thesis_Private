@@ -7500,6 +7500,10 @@ if __name__ == "__main__":
             apply_existing_solar_rooftop_capacities(
                 n, snakemake.input.existing_solar_rooftop_capacities, **existing_kwargs
             )
+        apply_existing_pit_capacities(
+            n, existing.get("pit_storage_MWh", {}),
+            node_map=existing_node_map, keep_extendable=existing["keep_extendable"],
+        )
     else:
         logger.info(
             f"Not applying existing capacities in {investment_year} "

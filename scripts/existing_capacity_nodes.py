@@ -32,8 +32,8 @@ def map_existing_capacity_nodes(n, capacities, node_map=None):
     return capacities
 
 
-def apply_existing_pit_capacities(n, capacities_mwh, node_map=None):
-    """Fix pit energy and power ratings after resolving legacy bus names."""
+def apply_existing_pit_capacities(n, capacities_mwh, node_map=None, keep_extendable=False):
+    """Set pit energy/power minimums, optionally allowing expansion."""
     assignments = []
     for node, energy in capacities_mwh.items():
         target = resolve_capacity_node(n, node, node_map)
@@ -47,6 +47,6 @@ def apply_existing_pit_capacities(n, capacities_mwh, node_map=None):
             raise ValueError(f"Invalid existing pit size or sizing parameters at {target}.")
         assignments.append((store, charger, discharger, energy, energy / ratio, eta))
     for store, charger, discharger, energy, power, eta in assignments:
-        n.stores.loc[store, ["e_nom", "e_nom_min", "e_nom_extendable"]] = [energy, energy, False]
+        n.stores.loc[store, ["e_nom", "e_nom_min", "e_nom_extendable"]] = [energy, energy, keep_extendable]
         for link, rating in ((charger, power), (discharger, power / eta)):
-            n.links.loc[link, ["p_nom", "p_nom_min", "p_nom_extendable"]] = [rating, rating, False]
+            n.links.loc[link, ["p_nom", "p_nom_min", "p_nom_extendable"]] = [rating, rating, keep_extendable]

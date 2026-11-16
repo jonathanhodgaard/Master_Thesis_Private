@@ -52,6 +52,27 @@ class ExistingCapacityNodesTests(unittest.TestCase):
             apply_existing_pit_capacities(n, {"DK1 0AC": 55000}, {"DK1 0AC": "DK2 0AC"})
         self.assertTrue(n.stores.empty)
 
+    def test_pit_minimums_allow_energy_and_power_expansion(self):
+        n = pypsa.Network()
+        n.add("Bus", "DK2 0AC", carrier="AC")
+        heat, tank = "DK2 0AC urban central heat", "DK2 0AC urban central water pits"
+        n.add("Bus", heat)
+        n.add("Bus", tank)
+        n.add("Store", tank, bus=tank)
+        n.add("Link", tank + " charger", bus0=heat, bus1=tank)
+        n.add("Link", tank + " discharger", bus0=tank, bus1=heat, efficiency=0.9)
+        n.links.loc[tank + " charger", "energy to power ratio"] = 10
+        apply_existing_pit_capacities(
+            n, {"DK1": 55000}, {"DK1": "DK2 0AC"}, keep_extendable=True,
+        )
+        self.assertEqual(n.stores.at[tank, "e_nom_min"], 55000)
+        self.assertTrue(n.stores.at[tank, "e_nom_extendable"])
+        self.assertGreater(n.stores.at[tank, "e_nom_max"], 55000)
+        self.assertEqual(n.links.at[tank + " charger", "p_nom_min"], 5500)
+        self.assertAlmostEqual(n.links.at[tank + " discharger", "p_nom_min"] * 0.9, 5500)
+        self.assertTrue(n.links.p_nom_extendable.all())
+        self.assertTrue((n.links.p_nom_max > n.links.p_nom_min).all())
+
 
 if __name__ == "__main__":
     unittest.main()

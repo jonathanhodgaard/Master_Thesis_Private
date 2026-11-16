@@ -83,22 +83,16 @@ sector:
     GB: {2025: 0.069, 2035: 0.469}
   # Existing capacities from data/existing_infrastructure (added ourselves). If missing: applied in every year.
   existing_infrastructure:
-    apply_in_years: [2035] # NOT applied in 2035, otherwise the 2025 capacities become a minimum
+    apply_in_years: [2035] # Retain the CSV capacities as minimums in 2035
     keep_extendable: true # p_nom_min = existing capacity, solver may build more
     chp_heat_capacities: data/existing_infrastructure/existing_chp_heat_capacities.csv
     rural_decentral_heat_capacities: data/existing_infrastructure/existing_rural_decentral_heat_capacities.csv
     solar_rooftop_capacities: data/existing_infrastructure/existing_solar_rooftop_capacities.csv
-  # Fix existing capacity and block new capacity (added ourselves). If missing: nothing is fixed.
-  fix_existing_capacity:
-    enable: true
-    countries: [DK]
-    years: [2035] # only 2035, so nothing is fixed in this 2035 run
-    keep_extendable_carriers: "(rural|urban decentral) gas boiler" # regex; covers services and agriculture heat not in the CSVs
-    block_new_carriers: [urban central coal CHP, urban central oil CHP, coal, lignite, CCGT, OCGT]
-    block_new_carrier_suffixes: [" CC"] # carbon capture variants
-    pit_storage_MWh: # fixed pit thermal storage; DK1/DK2 are mapped to the network's buses by location
+    pit_storage_MWh: # Minimum pit energy; storage and charging/discharging may expand
       DK2: 45000 # Eastern Denmark
       DK1: 55000 # Western Denmark
+  fix_existing_capacity:
+    enable: false # Keep existing capacity extendable in 2035
   overdimension_heat_generators: #no oversizing, since we have the actual heat capacity and every heat technology is extendable
     decentral: 1.0 
   chp:
