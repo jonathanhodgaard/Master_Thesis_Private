@@ -82,6 +82,42 @@ def assert_fixed_capacities(n):
             raise ValueError(f"Dispatch must not contain extendable {component} assets.")
 
 
+def apply_low_voltage_capacity_multipliers(n, multipliers):
+    """Scale fixed distribution links by country, including reverse-direction links."""
+    if not multipliers:
+        return
+    if not isinstance(multipliers, dict):
+        raise ValueError("Low-voltage capacity multipliers must be a country-to-factor mapping.")
+    if "low_voltage_capacity_adjustments" in n.meta:
+        raise ValueError("Low-voltage capacity multipliers have already been applied.")
+    records = []
+    links = n.links.loc[n.links.carrier.eq("electricity distribution grid")]
+    for country, factor in multipliers.items():
+        if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not np.isfinite(factor) or factor <= 0:
+            raise ValueError("Low-voltage capacity multipliers must be positive finite numbers.")
+        selected = []
+        for name, row in links.iterrows():
+            endpoints = n.buses.loc[[row.bus0, row.bus1]]
+            if set(endpoints.carrier) != {"AC", "low voltage"}:
+                continue
+            low_voltage = endpoints.loc[endpoints.carrier.eq("low voltage")].iloc[0]
+            if low_voltage.get("country", "") == country:
+                selected.append(name)
+        if not selected:
+            raise ValueError(f"No low-voltage distribution links found for country {country!r}.")
+        for name in selected:
+            original = float(n.links.at[name, "p_nom"])
+            if n.links.at[name, "p_nom_extendable"] or not np.isfinite(original) or original < 0:
+                raise ValueError(f"Freeze finite distribution capacities before scaling {name}.")
+            records.append({"link": name, "country": country, "multiplier": float(factor),
+                            "original_input_capacity_MW": original,
+                            "input_capacity_MW": original * factor})
+    # Validate every selection before changing any capacity.
+    for record in records:
+        n.links.loc[record["link"], ["p_nom", "p_nom_opt", "p_nom_min", "p_nom_max"]] = record["input_capacity_MW"]
+    n.meta = {**n.meta, "low_voltage_capacity_adjustments": records}
+
+
 def set_weather(n, weather):
     """Transfer operating inputs by asset name, keeping base dates and equipment."""
     for network in (n, weather):
@@ -234,6 +270,10 @@ if __name__ == "__main__":
     weather_file = snakemake.input.get("weather", [])
     if weather_file:
         set_weather(n, pypsa.Network(weather_file))
+
+    apply_low_voltage_capacity_multipliers(
+        n, snakemake.params.get("low_voltage_capacity_multipliers", {}),
+    )
 
     if snakemake.params.get("rolling_horizon", False):
         from scripts.disruption_waste_hvc import prepare_waste_hvc
