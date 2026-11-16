@@ -33,9 +33,20 @@ rule prepare_disruption_network:
         "../scripts/prepare_network_disruptions.py"
 
 
+rule apply_interconnector_disruption:
+    input:
+        net=DISRUPTION_DIR + "/{case}/network_prepared.nc",
+    output:
+        net=DISRUPTION_DIR + "/{case}/network_disrupted.nc",
+    params:
+        events=lambda w: DISRUPTION["cases"][w.case].get("interconnector_outages", []),
+    script:
+        "../scripts/interconnector_disruption.py"
+
+
 rule solve_disruption_dispatch:
     input:
-        network=DISRUPTION_DIR + "/{case}/network_prepared.nc",
+        network=DISRUPTION_DIR + "/{case}/network_disrupted.nc",
         reference=DISRUPTION["base_network"],
     output:
         network=DISRUPTION_DIR + "/{case}/network_solved.nc",

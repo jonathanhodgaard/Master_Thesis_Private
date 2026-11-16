@@ -75,12 +75,14 @@ compatible tank templates and disabled residential building DSM. Dispatch subseq
 
 - Donor networks transfer operating inputs (loads, renewable availability, inflows, temperature-dependent efficiencies and other availability series) by asset name. Base equipment/capacities and date labels are retained. Calendar hours and snapshot weights must match; remove leap days consistently.
 - Fuel backup Links provide parallel **delivery capacity**, still consuming upstream fuel. They do not create an independent emergency fuel stock. Their configured premium is added to the original delivery cost.
-- Electricity/heat shedding is limited by instantaneous demand, including allocated household heat. The current 2025 overlay prices both at EUR 10,000/MWh.
+- Electricity/heat shedding is limited by instantaneous demand, including allocated household heat. The consolidated dispatch config prices electricity at EUR 10,000/MWh and heat at EUR 20,000/MWh.
 - Rolling dispatch requires consecutive, unit-weight hourly snapshots, a successfully solved matching reference and continuous dispatch. Unit commitment and finite aggregate green-import budgets are currently rejected.
-- Selected storage MSVs come from the annual mean of reference `mu_energy_balance` duals. Accounting stores are excluded. Reference fuel-budget duals must also be present when scarcity pricing is enabled; regenerate the matching base if absent.
+- Selected storage MSVs come from reference `mu_energy_balance` duals, using hourly values or annual means by carrier. The consolidated config uses hourly physical-storage values and annual fuel values. Accounting stores are excluded. Reference fuel-budget duals must also be present when scarcity pricing is enabled; regenerate the matching base if absent.
 - Resource allowances are **price-only by default** in the supplied disruption overlays (`enforce_allowances: false`): usage/exceedance is reported but an annual cap is not enforced unless enabled globally or by carrier.
 - MSV charges, resource scarcity charges, physical operating costs and CO2 premiums are reported separately. The rolling objective sums implemented periods; overlapping window objectives must not be summed as total operating cost.
-- These cases currently change weather/dispatch conditions; arbitrary asset-outage schedules or fuel-price-shock schedules are not configured by the disruption rule itself. The companion fuel-shock workflow is a separate implementation.
+- Cases can combine donor weather with dated electrical interconnector outages (`interconnector_outages`). Outages set Link `p_min_pu`/`p_max_pu` and Line `s_max_pu` to zero after weather transfer; installed capacities and reference inputs are retained. Select both forward and `-reversed` Links. Fuel-price shocks remain a separate companion workflow.
+- Outage intervals are start-inclusive/end-exclusive and use the base-network calendar (July 2013-June 2014 in the current 2025 case). They must align with consecutive hourly snapshots and lie within the network period. Rolling windows select the same dated inputs, including overlap; the outage and restoration are known whenever they enter the look-ahead. Surprise outages need a separate information/forecast model.
+- AC Line outages are supported only for graph bridges; meshed Line selections are rejected because setting a zero thermal limit alone does not remove the line from Kirchhoff cycle constraints. Line `"4"` is the Eastern Denmark-Sweden bridge in the current network. This is a fixed-capacity dispatch experiment, not a transient stability simulation. Link ramp limits, if introduced, also need to accommodate forced trips/restoration.
 
 ## New and modified workflow rules
 
@@ -92,6 +94,7 @@ compatible tank templates and disabled residential building DSM. Dispatch subseq
 | `rules/solve_overnight.smk`: `solve_sector_network` | Add conditional `household_heat_shares_*.csv` and `resource_budget_duals_*.csv` outputs. |
 | New `rules/prepare_disruption.smk`: `dispatch_disruptions` | Aggregate solved-network and report targets for every enabled case. |
 | New `rules/prepare_disruption.smk`: `prepare_disruption_network` | Read the solved base, optional weather donor and matching household-share CSV; write `<output_directory>/<case>/network_prepared.nc`. |
+| New `rules/prepare_disruption.smk`: `apply_interconnector_disruption` | Run `scripts/interconnector_disruption.py` after preparation; apply each case's outage schedule and write `network_disrupted.nc`, including outage metadata. An empty schedule passes the prepared network through. |
 | New `rules/prepare_disruption.smk`: `solve_disruption_dispatch` | Write `network_solved.nc`, `household_heat_shares.csv`, `fuel_backup_dispatch.csv`, `resource_usage.csv`, `storage_msv.csv`, `window_summary.csv` and `dispatch_summary.csv`. Also declare solver/Python logs. |
 
 Full-horizon dispatch retains the reporting filenames, but rolling-only tables can contain headers only.
@@ -106,6 +109,7 @@ Rolling runs additionally create per-window solver logs; failed Gurobi solves ma
 | `config/config.sector_2035_w_V2G.yaml`, `config/config.sector_2035_wo_V2G.yaml` | 2035 overnight comparisons with EV DSM enabled and V2G respectively enabled/disabled. Existing CSV overlays are restricted to 2025; separately configured 2035 capacity-fixing settings still apply. |
 | `config/config.weather_1965_66.yaml` | Prepare an alternative July 1965-June 1966 weather donor, separate resource prefix, historical ERA5 cutout, leap-day removal and fixed reference nuclear availability. |
 | `config/config.disruption_dispatch_2025.yaml` | Matching 2025 disruption overlay. Currently enables `base_weather`, uses a 120-hour window / 24-hour overlap and no simulation cutoff. The historical-weather case is commented out. |
+| `config/config.disruption_dispatch.yaml` | Recommended single dispatch configuration: seven-day look-ahead, two-day implementation, mixed hourly/annual storage values, 96-hour waste buffer, baseline and an example seven-day Eastern Denmark isolation. Replaces the stack of rolling/disruption overlays for new runs; sector and Sophia configurations stay separate. |
 | `config/config.disruption_dispatch_2035_w_V2G.yaml`, `config/config.disruption_dispatch_2035_wo_V2G.yaml` | Matching 2035 disruption overlays; currently use 48-hour windows / 24-hour overlap and an exclusive `2013-07-15` cutoff for initial testing. |
 | `config/config.sophia.yaml` | SOPHIA solver-directory override. |
 | `config/config.scenario.default.yaml` | Draft scenario/network template with a placeholder network path; not a ready-to-run disruption overlay. |
@@ -131,13 +135,24 @@ require the prepared donor. Load the sector configuration first and disruption o
 Use the restricted rule list so missing or stale external inputs cannot schedule capacity expansion or donor preparation:
 
 ```bash
-snakemake dispatch_disruptions --allowed-rules dispatch_disruptions prepare_disruption_network solve_disruption_dispatch --configfiles config/config.sector_2025.yaml config/config.disruption_dispatch_2025.yaml --cores 8
+snakemake dispatch_disruptions --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch --configfiles config/config.sector_2025.yaml config/config.disruption_dispatch.yaml --cores 8
 ```
 
 Do not load the historical-weather preparation overlay into this dispatch command; select the donor
 through `disruption.cases.<case>.weather_network`. Update all target paths after changing run names,
 clustering, scenario options or planning horizons. For SOPHIA, insert `config/config.sophia.yaml`
 between sector and disruption configurations.
+
+For the consolidated Sophia run, submit `run_dispatch_2025_base_weather_mixed_msv_7day_2day.sbatch`.
+Despite its historical filename, this launcher now uses only the separate sector/Sophia files and
+`config/config.disruption_dispatch.yaml`, and targets every configured case rather than only
+`base_weather`. Edit the single dispatch file to change rolling settings, low-voltage multipliers,
+weather donors, outage asset lists or dates. The supplied outage dates (10-17 January 2014) are an
+example experiment. Use a new `output_directory` to preserve results from a different experiment.
+Historical overlay files and their other launchers remain available for reproducing older trials;
+do not append those overlays to the consolidated run. For another planning scenario, change the
+separate sector config and match `base_network`, `household_shares`, `planning_horizon`, asset names
+and outage dates in the dispatch config to that scenario's solved reference.
 
 Plot saved dispatch:
 
@@ -210,5 +225,8 @@ Added existing test modules cover capacity overrides, capacity-node mapping, hou
 disruption preparation, annual resource-budget duals and rolling dispatch:
 `test_capacity_overrides.py`, `test_existing_capacity_nodes.py`, `test_household_heat_constraints.py`,
 `test_disruption_preparation.py`, `test_resource_budget_duals.py` and `test_rolling_disruption_dispatch.py`.
+`test_interconnector_disruption.py` additionally checks outage calendar/name validation, preserved
+weather profiles and capacities, NetCDF round-tripping, rejection of meshed AC outages, and actual
+import/export interruption and restoration in both full-horizon and overlapping rolling dispatch.
 This documentation update was checked against source and Git differences; it does not establish that
 these tests or full solver/weather workflows were executed successfully.

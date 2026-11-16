@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dispatch_2025_mixed_msv_7day_2day
+#SBATCH --job-name=dispatch_2025_disruptions
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -23,29 +23,30 @@ export TMP="$task_tmp_dir"
 export TEMP="$task_tmp_dir"
 
 test -f config/config.sophia.yaml
-test -f results/sector_2025/networks/base_s_10___2025.nc
-test -f results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
 
-# No donor network is needed: retain all operating inputs in the solved base.
-python -c "import yaml; c=yaml.safe_load(open('config/config.disruption_dispatch_2025.yaml')); case=c['disruption']['cases'].get('base_weather'); assert isinstance(case, dict) and case.get('weather_network') is None, 'Enable base_weather with weather_network: null in the disruption configuration'"
+# The single dispatch config selects reference inputs, cases and rolling settings.
+# Fail before scheduling jobs if an external solved input is missing.
+python - <<'PY'
+from pathlib import Path
+import yaml
 
-# Explicit outputs select ONLY base_weather, even if other cases are enabled.
-snakemake \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/network_solved.nc \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/household_heat_shares.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/fuel_backup_dispatch.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/resource_usage.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/storage_msv.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/storage_msv_timeseries.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/window_summary.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day/base_weather/dispatch_summary.csv \
+with open("config/config.disruption_dispatch.yaml", encoding="utf-8") as stream:
+    disruption = yaml.safe_load(stream)["disruption"]
+inputs = [disruption["base_network"], disruption.get("household_shares")]
+inputs += [case.get("weather_network") for case in disruption["cases"].values()]
+for name in inputs:
+    if name and not Path(name).is_file():
+        raise FileNotFoundError(f"Required prepared/solved input is missing: {name}")
+PY
+
+# Run every configured case, including the baseline and interconnector outage.
+# Restrict rules so external inputs cannot trigger investment/weather builds.
+snakemake dispatch_disruptions \
   --executor local \
-  --allowed-rules prepare_disruption_network solve_disruption_dispatch \
+  --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch \
   --configfiles config/config.sector_2025.yaml \
                 config/config.sophia.yaml \
-                config/config.disruption_dispatch_2025.yaml \
-                config/config.disruption_dispatch_2025_mixed_msv.yaml \
-                config/config.disruption_dispatch_2025_mixed_msv_7day_2day.yaml \
+                config/config.disruption_dispatch.yaml \
   --cores "$SLURM_CPUS_PER_TASK" \
   --resources mem_mb=64000 \
   --default-resources "tmpdir=$TMPDIR" \

@@ -68,6 +68,12 @@ See **[Thesis changes, scripts, workflow rules and usage](doc/thesis_changes.md)
 with the release, new and modified scripts/rules, scenario configurations, inputs, reports,
 compatibility fixes, and companion data-preparation scripts. Notebooks are excluded.
 
+New rolling/disruption runs use **`config/config.disruption_dispatch.yaml`** for all dispatch
+settings and cases, loaded after the separate sector configuration (and `config/config.sophia.yaml`
+on Sophia). It includes a baseline and a configurable Eastern Denmark interconnector outage.
+The updated `run_dispatch_2025_base_weather_mixed_msv_7day_2day.sbatch` runs all cases from that
+single file; its example outage dates use the network's 2013/2014 calendar.
+
 # Warnings
 
 PyPSA-Eur is under active development and has several
