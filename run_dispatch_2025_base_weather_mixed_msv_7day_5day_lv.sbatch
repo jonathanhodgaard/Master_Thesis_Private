@@ -31,22 +31,22 @@ python -c "import yaml; c=yaml.safe_load(open('config/config.disruption_dispatch
 
 # Explicit outputs select ONLY base_weather, even if other cases are enabled.
 snakemake \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/network_solved.nc \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/household_heat_shares.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/fuel_backup_dispatch.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/resource_usage.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/storage_msv.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/storage_msv_timeseries.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/window_summary.csv \
-  results/disruptions/sector_2025_rolling_mixed_msv_7day_2day_lv/base_weather/dispatch_summary.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/network_solved.nc \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/household_heat_shares.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/fuel_backup_dispatch.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/resource_usage.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/storage_msv.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/storage_msv_timeseries.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/window_summary.csv \
+  results/disruptions/sector_2025_rolling_mixed_msv_7day_5day_lv/base_weather/dispatch_summary.csv \
   --executor local \
   --allowed-rules prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch \
   --configfiles config/config.sector_2025.yaml \
                 config/config.sophia.yaml \
                 config/config.disruption_dispatch_2025.yaml \
                 config/config.disruption_dispatch_2025_mixed_msv.yaml \
-                config/config.disruption_dispatch_2025_mixed_msv_7day_2day.yaml \
-                config/config.disruption_dispatch_2025_mixed_msv_7day_2day_lv.yaml \
+                config/config.disruption_dispatch_2025_mixed_msv_7day_5day.yaml \
+                config/config.disruption_dispatch_2025_mixed_msv_7day_5day_lv.yaml \
   --cores "$SLURM_CPUS_PER_TASK" \
   --resources mem_mb=64000 \
   --default-resources "tmpdir=$TMPDIR" \
