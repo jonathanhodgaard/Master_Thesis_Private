@@ -167,6 +167,6 @@ solving:
     gurobi-default:
       threads: 8
       BarHomogeneous: 1
-      NumericFocus: 3
+      NumericFocus: 1
   mem_mb: 60000
   runtime: 12h

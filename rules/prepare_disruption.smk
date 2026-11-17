@@ -3,7 +3,10 @@
 
 
 # Custom dispatch workflow. Inputs are matching solved-base and donor networks.
-DISRUPTION = config["disruption"]
+from scripts.disruption_scenarios import select_disruption
+
+DISRUPTION = select_disruption(config)
+config["disruption"] = DISRUPTION
 DISRUPTION_DIR = DISRUPTION["output_directory"].rstrip("/")
 
 

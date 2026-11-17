@@ -30,9 +30,15 @@ dispatch_target=$(python - <<'PY'
 from pathlib import Path
 import os
 import yaml
+from scripts.disruption_scenarios import select_disruption
 
 with open("config/config.interconnector_disruption.yaml", encoding="utf-8") as stream:
-    disruption = yaml.safe_load(stream)["disruption"]
+    config = yaml.safe_load(stream)
+for variable, key in [("DISRUPTION_WEATHER_YEAR", "disruption_weather_year"),
+                      ("DISRUPTION_CASE", "disruption_case")]:
+    if os.environ.get(variable):
+        config[key] = os.environ[variable]
+disruption = select_disruption(config)
 case = os.environ.get("DISRUPTION_CASE")
 if case and case not in disruption["cases"]:
     raise ValueError(f"Unknown DISRUPTION_CASE {case!r}; choose from {list(disruption['cases'])}")
@@ -45,6 +51,18 @@ for name in inputs:
 print(f"{disruption['output_directory'].rstrip('/')}/{case}/network_solved.nc" if case else "dispatch_disruptions")
 PY
 )
+
+config_overrides=()
+if [[ -n ${DISRUPTION_WEATHER_YEAR:-} ]]; then
+  config_overrides+=("disruption_weather_year=$DISRUPTION_WEATHER_YEAR")
+fi
+if [[ -n ${DISRUPTION_CASE:-} ]]; then
+  config_overrides+=("disruption_case=$DISRUPTION_CASE")
+fi
+config_args=()
+if (( ${#config_overrides[@]} )); then
+  config_args=(--config "${config_overrides[@]}")
+fi
 
 # Run all configured cases, or select one with DISRUPTION_CASE=se_interconnector.
 # Restrict rules so external inputs cannot trigger investment/weather builds.
@@ -60,4 +78,5 @@ snakemake "$dispatch_target" \
   --resources mem_mb=64000 \
   --default-resources "tmpdir=$TMPDIR" \
   --printshellcmds \
+  "${config_args[@]}" \
   "$@"

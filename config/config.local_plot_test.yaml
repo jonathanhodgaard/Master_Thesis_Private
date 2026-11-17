@@ -15,5 +15,6 @@ run:
 
 disruption:
   output_directory: results/disruptions/sector_2025_dispatch
+  weather_years: null # Preserve the legacy flat layout of these saved networks.
   plotting:
     existing_only: true

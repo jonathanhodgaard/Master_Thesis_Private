@@ -9,6 +9,20 @@ disruption:
   household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
   planning_horizon: 2025
   output_directory: results/disruptions/sector_2025_interconnector_disruption
+  # One campaign per invocation. Array jobs select a weather year and case.
+  # Outputs: {output_directory}/{weather_year}/{case}/.
+  default_weather_year: "2013-2014"
+  weather_years:
+    "2013-2014":
+      weather_network: null # Original solved reference weather.
+    "1964-1965":
+      weather_network: resources/weather_1964_65/sector_2025/networks/base_s_10___2025.nc
+    "1965-1966":
+      weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
+    "1968-1969":
+      weather_network: resources/weather_1968_69/sector_2025/networks/base_s_10___2025.nc
+    "1982-1983":
+      weather_network: resources/weather_1982_83/sector_2025/networks/base_s_10___2025.nc
   iis_time_limit: 300
 
   rolling_horizon:
@@ -100,7 +114,7 @@ disruption:
     heat_cost: 100000 # Gøtske (2024)
 
   # Outage plots (rules/plot_disruption.smk), made after each case is solved.
-  # Per case: {output_directory}/{case}/plots/; all cases: {output_directory}/plots/.
+  # Under each weather year: {case}/plots/ and comparison plots in plots/.
   plotting:
     enable: true
     region: DK0 0AC          # model cluster DK0 = Zealand (bidding zone DK2); cluster DK2 = Jutland
