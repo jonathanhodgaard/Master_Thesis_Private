@@ -87,7 +87,6 @@ sector:
     apply_in_years: [2035] # Retain the CSV capacities as minimums in 2035
     keep_extendable: true # p_nom_min = existing capacity, solver may build more
     chp_heat_capacities: data/existing_infrastructure/existing_chp_heat_capacities.csv
-    rural_decentral_heat_capacities: data/existing_infrastructure/existing_rural_decentral_heat_capacities.csv
     solar_rooftop_capacities: data/existing_infrastructure/existing_solar_rooftop_capacities.csv
     pit_storage_MWh: # Minimum pit energy; storage and charging/discharging may expand
       DK2: 45000 # Eastern Denmark
@@ -159,13 +158,14 @@ clustering:
 
 solving:
   options:
-    assign_all_duals: true 
-  # Temporary storage is directed to /scratch by the submission script.
+    assign_all_duals: true
   solver:
     name: gurobi
     options: gurobi-default
   solver_options:
     gurobi-default:
       threads: 8
+      BarHomogeneous: 1
+      NumericFocus: 1
   mem_mb: 60000
   runtime: 12h
