@@ -92,6 +92,7 @@ include: "rules/development.smk"
 
 if "disruption" in config:
     include: "rules/prepare_disruption.smk"
+    include: "rules/plot_disruption.smk"
 
 
 if config["foresight"] == "overnight":

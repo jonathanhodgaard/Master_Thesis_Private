@@ -51,6 +51,8 @@ PY
 snakemake "$dispatch_target" \
   --executor local \
   --allowed-rules dispatch_disruptions prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch \
+                  plot_outage_dispatch plot_outage_missing_demand \
+  --rerun-triggers mtime \
   --configfiles config/config.sector_2025.yaml \
                 config/config.sophia.yaml \
                 config/config.interconnector_disruption.yaml \

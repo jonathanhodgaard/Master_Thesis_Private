@@ -13,7 +13,9 @@ rule dispatch_disruptions:
             DISRUPTION_DIR + "/{case}/{report}", case=list(DISRUPTION["cases"]),
             report=["network_solved.nc", "household_heat_shares.csv", "fuel_backup_dispatch.csv",
                     "resource_usage.csv", "storage_msv.csv", "storage_msv_timeseries.csv", "window_summary.csv", "dispatch_summary.csv"],
-        )
+        ),
+        # outage plots (rules/plot_disruption.smk); off with disruption: plotting: enable: false
+        plots=lambda w: all_plot_files() if DISRUPTION.get("plotting", {}).get("enable", True) else [],
 
 
 rule prepare_disruption_network:

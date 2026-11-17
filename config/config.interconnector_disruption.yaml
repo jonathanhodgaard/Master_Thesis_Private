@@ -98,6 +98,28 @@ disruption:
     elec_cost: 23300 # DEA VoLL Denmark (2023)
     heat_cost: 100000 # Gøtske (2024)
 
+  # Outage plots (rules/plot_disruption.smk), made after each case is solved.
+  # Per case: {output_directory}/{case}/plots/; all cases: {output_directory}/plots/.
+  plotting:
+    enable: true
+    region: DK0 0AC          # model cluster DK0 = Zealand (bidding zone DK2); cluster DK2 = Jutland
+    region_label: DK2        # used in titles and file names
+    shed_noise_mw: 0.1       # hourly load shedding below this is solver noise and set to 0
+    zoom_windows:            # hourly zoom; windows outside the snapshots are skipped
+      Summer: ["2013-07-08", "2013-07-21"]
+      Winter: ["2014-01-13", "2014-01-26"]
+    missing_demand_resample: null   # null = hourly curves; "D" = daily maximum
+    case_labels:             # legend names; curve colours follow the order of cases below
+      base_weather: Base (no outage)
+      se_interconnector: Øresund out
+      de_interconnector: Kontek out
+      dk1_interconnector: Great Belt out
+      se_de_interconnector: Øresund + Kontek out
+      se_dk1_interconnector: Øresund + Great Belt out
+      de_dk1_interconnector: Kontek + Great Belt out
+      eastern_denmark_all: All 3 out
+    existing_only: false     # true: plot only cases whose solved network exists (never solve)
+
   # dispatch_disruptions runs every case listed here with shared settings above.
   # Each case can combine a prepared donor weather network and multiple outages.
   cases:
