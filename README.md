@@ -91,6 +91,21 @@ Enabled heat-disposal sinks are sized from the combined heat-input capacity at e
 than heat demand or baseline vent usage. The rating follows capacity expansion in base solves
 and is refreshed from frozen capacities when preparing disruption dispatch from older bases.
 
+## Plot existing local disruption results
+
+The eight saved local cases are under `results/disruptions/sector_2025_dispatch/<case>/network_solved.nc`.
+Load the local plotting overlay last to use that folder and the case labels from the disruption configuration:
+
+```powershell
+pixi run snakemake plot_disruptions --cores 2 --allowed-rules plot_outage_dispatch plot_outage_missing_demand --configfiles config/config.sector_2025.yaml config/config.interconnector_disruption.yaml config/config.local_plot_test.yaml
+```
+
+Append `--dry-run` to preview the jobs. This command only allows plotting rules and uses existing solved networks.
+Per-case PNG/PDF figures are written to `<case>/plots/`; comparison figures and summary/hourly CSVs
+are written to `results/disruptions/sector_2025_dispatch/plots/`.
+The local overlay sets the default target to `plot_disruptions` and skips cases without a saved solved network.
+It selects older saved results; loading newer dispatch settings does not change those networks.
+
 # Warnings
 
 PyPSA-Eur is under active development and has several

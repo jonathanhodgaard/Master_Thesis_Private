@@ -6,12 +6,14 @@
 #     --configfiles config/config.sector_2025.yaml config/config.interconnector_disruption.yaml \
 #                   config/config.local_plot_test.yaml --cores 2
 #
-# Snakemake expects {output_directory}/{case}/network_solved.nc, so the folder names under
-# results/ are the cases. Cases without a solved network (e.g. Frederik's 8 cases) are skipped.
+# Existing local results: {output_directory}/{case}/network_solved.nc.
+# Inherit the eight case names and plot labels from config.interconnector_disruption.yaml.
+# This overlay selects saved results; their solve settings remain those stored in each network.
+# Plot outputs go to {output_directory}/{case}/plots/ and {output_directory}/plots/.
+run:
+  default_target_rule: plot_disruptions
+
 disruption:
-  output_directory: results
+  output_directory: results/disruptions/sector_2025_dispatch
   plotting:
-    case_labels: {disruptions: "Øresund out", disruptions_3: "All 3 out"}
-  cases:
-    disruptions: {weather_network: null}
-    disruptions_3: {weather_network: null}
+    existing_only: true
