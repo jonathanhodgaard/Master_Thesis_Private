@@ -1,0 +1,17 @@
+# Local test only: plot the existing disruption networks without solving anything.
+# Load after config.sector_2025.yaml and config.interconnector_disruption.yaml:
+#
+#   pixi run snakemake plot_disruptions --config plot_existing_only=true \
+#     --allowed-rules plot_outage_dispatch plot_outage_missing_demand \
+#     --configfiles config/config.sector_2025.yaml config/config.interconnector_disruption.yaml \
+#                   config/config.local_plot_test.yaml --cores 2
+#
+# Snakemake expects {output_directory}/{case}/network_solved.nc, so the folder names under
+# results/ are the cases. Cases without a solved network (e.g. Frederik's 8 cases) are skipped.
+disruption:
+  output_directory: results
+  plotting:
+    case_labels: {disruptions: "Øresund out", disruptions_3: "All 3 out"}
+  cases:
+    disruptions: {weather_network: null}
+    disruptions_3: {weather_network: null}
