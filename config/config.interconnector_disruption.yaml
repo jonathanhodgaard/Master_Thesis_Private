@@ -56,6 +56,7 @@ disruption:
           methanol: annual_mean
           H2 Store: annual_mean
           ammonia store: annual_mean
+          hydro: annual_mean
         stores:
           carriers: [urban central water pits, gas, biomass, coal, lignite, oil, methanol, H2 Store, ammonia store]
           assets: []
