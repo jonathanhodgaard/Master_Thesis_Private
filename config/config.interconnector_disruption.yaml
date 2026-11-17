@@ -8,7 +8,7 @@ disruption:
   base_network: results/sector_2025/networks/base_s_10___2025.nc
   household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
   planning_horizon: 2025
-  output_directory: results/disruptions/sector_2025_dispatch_fuel_caps_july60
+  output_directory: results/disruptions/sector_2025_interconnector_disruption
   iis_time_limit: 300
 
   rolling_horizon:
@@ -21,20 +21,28 @@ disruption:
       apply_scarcity_prices: true
       # Preserve finite domestic biofuel/resource limits and the configured import
       # allowance across windows. Scarcity prices still guide conservation.
+      # Domestic production is allowed UP TO its annual potential, not forced.
       # The 1390 TWh biomass-import allowance is a scenario assumption, not data.
       enforce_allowances: true
       overrides: {}
     storage:
-      initial_state: base_previous_snapshot
+      initial_state: base_previous_snapshot # Gas and other unlisted stores retain reference states.
       initial_inventory:
-        - countries: [DK]
-          carriers: [gas]
+        - countries: ["NL", "DE", "DK", "SE", "NO", "FI", "GB"]
+          carriers: [biomass]
           start_month_day: "07-01"
-          fill_fraction: 0.60
-          # National July 2025 target; not the historical stock (33%). Applying
-          # the same fraction to both regional stores is an allocation assumption.
-          # Initial stock only: no permanent 60% minimum and no later reset.
-          basis: "Target-based July start: Denmark 1 July 2025 target 60%; ENS https://ens.dk/presse/udbud-skal-bidrage-til-fylde-gaslagre-foer-vinteren ; capacity remains the frozen reference rating pending working-gas-volume calibration."
+          fill_fraction: 0.0
+          # One opening-state adjustment, not a reset at each rolling window.
+          # All subsequent biomass must enter via capped domestic supply,
+          # interregional transfers, or the separately capped external imports.
+          basis: "Zero opening solid-biomass inventory sensitivity: remove inherited cyclic reference stocks so domestic supply and imports account for all material used."
+        # These shared fuel buses have no country code; select their Stores directly.
+        - assets: ["EU coal Store", "EU oil Store"]
+          carriers: [coal, oil]
+          start_month_day: "07-01"
+          fill_fraction: 0.0
+          # Keep inventory capacities, supply Generators and refining Links intact.
+          basis: "Zero opening coal and refined-oil inventory sensitivity: replace uncalibrated cyclic reference endowments with purchases during dispatch."
       msv:
         enable: true
         source: mu_energy_balance

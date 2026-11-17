@@ -145,13 +145,24 @@ def apply_initial_inventory(n, reference, start, rules):
             raise ValueError("Initial inventory date does not match the configured start_month_day.")
         countries = rule.get("countries", [])
         carriers = rule.get("carriers", [])
-        if not countries or not carriers:
-            raise ValueError("Initial inventory overrides require countries and carriers.")
+        assets = rule.get("assets", [])
+        if not isinstance(assets, list) or any(not isinstance(name, str) for name in assets):
+            raise ValueError("Initial inventory assets must be a list of exact Store names.")
+        if not carriers or not (countries or assets):
+            raise ValueError("Initial inventory overrides require carriers and countries or assets.")
         if set(carriers).intersection(ACCOUNTING_CARRIERS):
             raise ValueError("Physical initial inventory overrides cannot target accounting stores.")
         stores = n.stores
-        country = stores.bus.map(n.buses.country)
+        country_codes = n.buses.get("country", pd.Series("", index=n.buses.index, dtype=object))
+        country = stores.bus.map(country_codes).fillna("")
         names = stores.index[stores.carrier.isin(carriers) & country.isin(countries)]
+        explicit = pd.Index(assets)
+        missing = explicit.difference(stores.index)
+        if len(missing):
+            raise ValueError(f"Unknown initial inventory Store assets: {missing.tolist()}")
+        if not stores.loc[explicit, "carrier"].isin(carriers).all():
+            raise ValueError("Initial inventory assets must match the selected carriers.")
+        names = names.union(explicit)
         if names.empty:
             raise ValueError("Initial inventory override matched no stores.")
         for name in names:

@@ -446,12 +446,131 @@ def test_initial_inventory_selects_only_requested_country_and_carrier():
         })
 
 
-def test_consolidated_dispatch_enforces_fuel_caps_and_labels_gas_target():
+def test_consolidated_dispatch_enforces_fuel_caps_and_preserves_reference_gas():
     path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
     rolling = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]
     assert rolling["resources"]["enforce_allowances"] is True
-    rule, = rolling["storage"]["initial_inventory"]
-    assert rule["countries"] == ["DK"]
-    assert rule["carriers"] == ["gas"]
-    assert rule["fill_fraction"] == 0.6
-    assert "target" in rule["basis"]
+    assert rolling["storage"]["initial_state"] == "base_previous_snapshot"
+    assert not any("gas" in r["carriers"] for r in rolling["storage"]["initial_inventory"])
+
+
+def test_zero_biomass_inventory_uses_capped_supply_and_imports_preserving_other_stocks(tmp_path):
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=8, freq="h"))
+    for carrier in ["biomass", "solid biomass", "unsustainable solid biomass", "solid biomass import", "gas", "coal", "oil"]:
+        ref.add("Carrier", carrier)
+    for country, price in [("DK", 2), ("DE", 4)]:
+        ref.add("Bus", country+" biomass", carrier="biomass", country=country)
+        ref.add("Generator", country+" biomass supply", bus=country+" biomass",
+                carrier="unsustainable solid biomass", p_nom=10, e_sum_max=4, marginal_cost=price)
+        ref.add("Store", country+" biomass store", bus=country+" biomass", carrier="biomass",
+                e_nom=20, e_cyclic=True)
+    ref.add("Link", "DE to DK biomass", bus0="DE biomass", bus1="DK biomass", p_nom=10, marginal_cost=.1)
+    ref.add("Load", "biomass demand", bus="DK biomass", p_set=1.5)
+    ref.add("Bus", "imports", carrier="solid biomass import")
+    ref.add("Store", "external import allowance", bus="imports", carrier="solid biomass import",
+            e_nom=6, e_initial=6, marginal_cost=10)
+    ref.add("Link", "external biomass delivery", bus0="imports", bus1="DK biomass", p_nom=10)
+    for carrier, initial in [("gas", 6), ("coal", 7), ("oil", 8)]:
+        ref.add("Bus", carrier, carrier=carrier, country="DK")
+        ref.add("Store", carrier, bus=carrier, carrier=carrier, e_nom=10, e_initial=initial, marginal_cost=1)
+    ref.add("Load", "gas demand", bus="gas", p_set=.1)
+    solve(ref)
+    save_resource_budget_duals(ref, tmp_path/"budget_duals.csv")
+    # A constant offset keeps the solved cyclic balances feasible, while
+    # reproducing the inherited opening-stock issue of the production network.
+    for country in ["DK", "DE"]:
+        ref.stores_t.e[country+" biomass store"] += 10
+    n = ref.copy()
+    rules = [
+        {"countries": ["DK", "DE"], "carriers": ["biomass"], "start_month_day": "07-01",
+         "fill_fraction": 0., "basis": "Zero opening biomass stock sensitivity"},
+    ]
+    reports = run(n, ref, enforce=True, options={"storage": {"msv": {"enable": False}, "initial_inventory": rules}})
+    for country in ["DK", "DE"]:
+        store=country+" biomass store"
+        assert n.stores.at[store,"e_initial"] == 0
+        assert n.stores_t.e[store].min() >= -1e-6
+        assert n.generators_t.p[country+" biomass supply"].sum() <= 4+1e-6
+    assert n.stores.at["gas","e_initial"] == 6
+    assert n.stores_t.e.gas.iloc[-1] == pytest.approx(5.2)
+    assert n.stores.at["coal","e_initial"] == 7
+    assert n.stores.at["oil","e_initial"] == 8
+    assert n.links_t.p0["DE to DK biomass"].sum() >= 2-1e-6
+    external=float(n.links_t.p0["external biomass delivery"].sum())
+    assert 4-1e-6 <= external <= 6+1e-6
+    usage=reports["resource_usage"]
+    assert usage.enforced.all()
+    assert usage.exceedance_MWh.max() < 1e-6
+    assert usage.scarcity_price_EUR_per_MWh.max() > 0
+    assert usage.implemented_MWh.sum() == pytest.approx(12)
+
+
+def test_configured_zero_fuel_stocks_preserve_cyclic_reference_gas_stock():
+    from scripts.disruption_storage_msv import initialize_storage
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=2, freq="h"))
+    for carrier in ["gas", "biomass"]:
+        ref.add("Bus", carrier, country="DK")
+        ref.add("Store", carrier, bus=carrier, carrier=carrier, e_nom=10,
+                e_initial=1, e_cyclic=True)
+    ref.stores_t.e["gas"] = [4, 5]
+    ref.stores_t.e["biomass"] = [6, 7]
+    for carrier in ["coal", "oil"]:
+        ref.add("Bus", "EU "+carrier)
+        ref.add("Store", "EU "+carrier+" Store", bus="EU "+carrier, carrier=carrier,
+                e_nom=10, e_initial=2, e_cyclic=True)
+        ref.stores_t.e["EU "+carrier+" Store"] = [7, 8]
+    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    storage = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]
+    n = ref.copy()
+    initialize_storage(n, ref, ref.snapshots[0], storage)
+    assert n.stores.at["gas", "e_initial"] == 5
+    assert n.stores.at["biomass", "e_initial"] == 0
+    assert n.stores.at["EU coal Store", "e_initial"] == 0
+    assert n.stores.at["EU oil Store", "e_initial"] == 0
+    assert not n.stores.e_cyclic.any()
+    assert ref.stores.at["gas", "e_initial"] == 1
+
+
+def test_empty_shared_fuel_stores_can_refill_from_preserved_supply():
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=4, freq="h"))
+    for carrier in ["coal", "oil"]:
+        ref.add("Carrier", carrier)
+        ref.add("Bus", "EU "+carrier, carrier=carrier)
+        ref.add("Generator", carrier+" supply", bus="EU "+carrier, p_nom=1.5, marginal_cost=3)
+        ref.add("Store", "EU "+carrier+" Store", bus="EU "+carrier, carrier=carrier,
+                e_nom=10, e_cyclic=True, marginal_cost=1)
+        ref.add("Load", carrier+" demand", bus="EU "+carrier, p_set=1)
+    solve(ref)
+    for name in ref.stores.index:
+        ref.stores_t.e[name] += 5
+    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    storage = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]
+    fossil_rules = [rule for rule in storage["initial_inventory"] if "assets" in rule]
+    n = ref.copy()
+    reports = run(n, ref, options={"horizon": 3, "overlap": 1, "storage": {
+        "msv": {"enable": False}, "initial_inventory": fossil_rules,
+    }})
+    assert n.stores.e_initial.eq(0).all()
+    assert n.stores.e_nom.eq(10).all()
+    assert n.generators.p_nom.eq(1.5).all()
+    np.testing.assert_allclose(n.generators_t.p.sum(), 4, atol=1e-6)
+    assert n.stores_t.e.min().min() >= -1e-6
+    assert reports["window_summary"].implemented_hours.sum() == 4
+
+
+def test_explicit_inventory_selection_rejects_missing_or_wrong_carrier_assets():
+    from scripts.disruption_storage_msv import apply_initial_inventory
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-07-01", periods=2, freq="h"))
+    ref.add("Bus", "EU oil")
+    ref.add("Store", "EU oil Store", bus="EU oil", carrier="oil", e_nom=10, e_initial=5)
+    rule = {"assets": ["missing"], "carriers": ["oil"], "fill_fraction": 0.,
+            "start_month_day": "07-01", "basis": "Test explicit shared inventory"}
+    with pytest.raises(ValueError, match="Unknown initial inventory"):
+        apply_initial_inventory(ref, ref, ref.snapshots[0], [rule])
+    with pytest.raises(ValueError, match="match the selected carriers"):
+        apply_initial_inventory(ref, ref, ref.snapshots[0], [{**rule, "assets": ["EU oil Store"], "carriers": ["coal"]}])
+    assert ref.stores.at["EU oil Store", "e_initial"] == 5

@@ -77,11 +77,15 @@ increases of 15% in Finland and 2% in Sweden. Existing heat vents are resized du
 Submit `sbatch run_dispatch_2025.sbatch` for all configured cases, or
 `sbatch --export=ALL,DISRUPTION_CASE=se_interconnector run_dispatch_2025.sbatch` for one case.
 The full reference year is simulated; outage start/end dates only control connection availability.
-Results go to `results/disruptions/sector_2025_dispatch_fuel_caps_july60`. Finite fuel allowances
-are enforced, with Danish gas initially at the 60% July 2025 target (not a permanent floor).
-Load `config/config.gas_inventory_observed_july2025.yaml` last for the observed 33% sensitivity.
-Frozen gas-storage capacities still require working-gas-volume calibration. Historical overlays remain for older
-experiments and should not be appended to this consolidated configuration.
+Results go to `results/disruptions/sector_2025_dispatch_fuel_caps_zero_biomass_coal_oil`.
+Solid-biomass Stores start empty in every modelled country; subsequent domestic supply is capped
+by the annual potential and priced with the reference scarcity premium. Supply is not compulsory.
+Imports and interregional biomass transport retain their frozen delivery capacities.
+Shared coal and refined-oil Stores also start empty, selected by exact asset name; fuel supplies,
+refining and storage capacities remain available. Gas in all countries uses the existing
+reference-state initialization, with no percentage fill override for Danish gas. Frozen gas capacities still require
+working-gas-volume calibration. Earlier experiment
+overlays are available in Git history and should not be appended to the consolidated configuration.
 
 Enabled heat-disposal sinks are sized from the combined heat-input capacity at each bus, rather
 than heat demand or baseline vent usage. The rating follows capacity expansion in base solves
