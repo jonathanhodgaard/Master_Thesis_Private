@@ -1,0 +1,84 @@
+1964-1965 window 67: diagnostic findings
+=====================================
+
+Inputs examined
+---------------
+results/disruptions/sector_2025_interconnector_disruption/1964-65/base_weather/
+  network_prepared.nc, network_disrupted.nc, infeasibility_window_0067.ilp,
+  infeasibility_window_0067.txt, solver_window_0067.log.
+Also checked the Sophia 1964-1965/de_dk1_interconnector saved .ilp.
+
+Confirmed result
+----------------
+The saved baseline .ilp has a minimal conflict consisting of six equations
+and five variable lower bounds at 2014-06-03 06:00, using the reference calendar:
+
+c598638: Bus-nodal_balance, NL2 0AC urban decentral heat
+c685732: Household-demand-70, air heat pump
+c685900: Household-demand-71, gas boiler
+c686068: Household-demand-72, oil boiler
+c686236: Household-demand-73, biomass boiler
+c686404: Household-demand-74, resistive heater
+
+The five technologies refer to NL2 0AC urban decentral heat demand delivery.
+Variable labels x312046 through x312050 are their fixed Household-heat-share
+variables. These labels were verified by rebuilding the network model's label
+mapping with PyPSA 1.2.4 and matching the equations and asset names.
+
+The .ilp contains rounded bounds, while network metadata retains the original
+precise shares:
+
+Technology        .ilp bound                  Original network share
+air heat pump     1.83715e-05                  1.8371452895702885e-05
+gas boiler        8.06676e-11                  8.066759581025018e-11
+oil boiler        0.9999737085181125           0.9999737085181125
+biomass boiler    5.76973e-06                  5.769733842251739e-06
+resistive heater  2.15021e-06                  2.150214481963755e-06
+
+The network shares sum to 1.0. The exported bounds sum to 1.00000000003878.
+At household demand 6882.443148241142 MW, this creates a discrepancy of
+2.669017664303642e-07 MW, approximately 0.267 watts. The solver feasibility
+tolerance was 1e-7.
+
+Verification
+------------
+Restoring all 95 fixed household shares from network metadata in the saved
+baseline subsystem, without changing other constraints, gives an optimal
+feasibility solution with both dual simplex (Method=1) and barrier (Method=2).
+Maximum constraint violation: 1.9463186617940664e-10.
+The same restoration makes the saved de_dk1_interconnector subsystem feasible:
+maximum constraint violation 1.8189894035458565e-11.
+
+Interpretation and limits
+-------------------------
+This proves an export-precision artifact in these saved diagnostics. It does
+not prove which constraints made the original complete live model fail.
+The .ilp omits the objective and constraints removed during the time-limited
+conflict search. It cannot substitute for the complete failed model.
+The existing network files are inputs saved before rolling dispatch; they do
+not preserve all storage states and resource counters carried into window 67.
+
+Annual fuel depletion remains a hypothesis, not an identified cause. The
+network household shares already sum to one; renormalizing those metadata
+shares is not an established remedy for the original failure.
+
+Diagnostic improvement
+----------------------
+scripts/solve_disruption_dispatch.py now saves the full solver problem as .mps
+and the named Linopy model as .model.nc before the IIS search. The text report
+records whether the returned IIS is minimal and warns that first-listed rows
+are not ranked by cause. Successful dispatch and physical model settings are
+unchanged. This change is local; it has not been copied to Sophia.
+
+A small genuinely infeasible model verified that all diagnostic files are
+written, the named model reloads, and precise fixed bounds survive unchanged.
+
+Next decisive step
+------------------
+Rerun the failing baseline with the updated diagnostic writer on Sophia.
+The resulting infeasibility_window_0067.model.nc and .mps preserve the full
+failed window, including the objective and actual carried-state equations.
+Use those to compare solver methods and reduce a conflict without .ilp
+rounding. No campaign-wide rerun is needed to obtain that first diagnosis.
+
+Analysis artifacts are in tmp/infeasibility_diagnosis/.

@@ -37,6 +37,20 @@ def write_infeasibility_report(n, report_path, time_limit=300):
     """Save conflicting equations and the solver IIS without changing the model."""
     report_path = Path(report_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    # Save the complete live problem before the time-limited IIS search. The
+    # human-readable .ilp can round tiny fixed bounds enough to create a new
+    # conflict; it is not a full-precision replacement for the failed model.
+    captures = []
+    for suffix, save in (
+        (".mps", lambda path: n.model.solver_model.write(str(path))),
+        (".model.nc", lambda path: n.model.to_netcdf(path)),
+    ):
+        path = report_path.with_suffix(suffix)
+        try:
+            save(path)
+            captures.append(str(path))
+        except Exception:
+            logger.exception("Could not save complete failed model to %s", path)
     try:
         solver_model = n.model.solver_model
         # Gurobi's IIS search can be expensive on a full-year sector model.
@@ -47,7 +61,10 @@ def write_infeasibility_report(n, report_path, time_limit=300):
             stream.write(
                 f"Conflicting constraint labels: {len(labels)}\n"
                 f"IIS search time limit: {time_limit} seconds\n"
-                "A time-limited IIS may not be minimal.\n"
+                f"IIS minimal: {bool(solver_model.IISMinimal)}\n"
+                "Complete model captures: " + ", ".join(captures) + "\n"
+                "The .ilp may round fixed bounds; use the complete captures for replay.\n"
+                "The first equations are in model order, not ranked by cause.\n"
                 "First 100 conflicting equations (base-network date labels):\n"
             )
             with redirect_stdout(stream):
@@ -55,7 +72,11 @@ def write_infeasibility_report(n, report_path, time_limit=300):
         logger.error("Infeasibility diagnostics saved to %s and .ilp", report_path)
     except Exception as exc:
         # Preserve the original solve failure even if diagnostics are unavailable.
-        report_path.write_text(f"Could not compute infeasibility diagnostics: {exc}\n", encoding="utf-8")
+        report_path.write_text(
+            f"Could not compute infeasibility diagnostics: {exc}\n"
+            "Complete model captures: " + ", ".join(captures) + "\n",
+            encoding="utf-8",
+        )
         logger.exception("Could not compute infeasibility diagnostics")
 
 
