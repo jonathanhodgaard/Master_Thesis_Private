@@ -266,6 +266,20 @@ def _capacity(n, component, name, attr):
     return float(row[attr])
 
 
+def _check_only_deliveries(n, groups, largest):
+    """The implied delivery must be the only free inflow at its heat bus."""
+    deliveries = {g["delivery"] for g in groups}
+    ports = [p for p in n.links.columns if p.startswith("bus") and p[3:].isdigit()]
+    for bus in largest:
+        others = [x for c in ("Generator", "Store", "StorageUnit")
+                  for x in n.components[c].static.index[n.components[c].static.bus.eq(bus)]]
+        others += [x for p in ports for x in n.links.index[n.links[p].eq(bus)]
+                   if x not in deliveries]
+        if others:
+            raise ValueError(f"{bus} has non-delivery connections {others}; "
+                             "cannot let the bus balance set the remaining delivery.")
+
+
 def add_household_heat_constraints(n, snapshots):
     """Add linear allocation and tank-sizing constraints AFTER create_model()."""
     settings = n.meta.get(META_KEY)
@@ -292,6 +306,20 @@ def add_household_heat_constraints(n, snapshots):
         keys = [g["group"] for g in groups if g["heat_bus"] == bus]
         n.model.add_constraints(shares.sel(household_group=keys).sum() == 1,
                                 name=f"Household-share-sum-{i}")
+    # Dispatch: shares are fixed, so once all but one delivery per heat bus are
+    # pinned, the heat-bus balance already determines the last one. Pinning all of
+    # them repeats that equation, and float round-off in the share sum then makes
+    # rolling windows infeasible (seen in donor weather years). The largest-share
+    # group on each bus takes the (negligible) remainder via the bus balance.
+    implied = set()
+    if dispatch_mode:
+        largest = {}
+        for i, g in enumerate(groups):
+            bus = g["heat_bus"]
+            if bus not in largest or fixed[g["group"]] > fixed[groups[largest[bus]]["group"]]:
+                largest[bus] = i
+        _check_only_deliveries(n, groups, largest)
+        implied = set(largest.values())
     for i, g in enumerate(groups):
         share = shares.sel(household_group=g["group"], drop=True)
         demand = xr.DataArray(_demand(n, g["heat_bus"], snapshots,
@@ -302,8 +330,9 @@ def add_household_heat_constraints(n, snapshots):
                                               loads=g["additional_demand_loads"]).values,
                                       coords=[snapshot_index])
         flow = _select(n.model["Link-p"], g["delivery"]).sel(snapshot=snapshots)
-        n.model.add_constraints(flow == share * demand + additional,
-                                name=f"Household-demand-{i}")
+        if i not in implied:
+            n.model.add_constraints(flow == share * demand + additional,
+                                    name=f"Household-demand-{i}")
         if dispatch_mode:
             # Capacities are already fixed; do not re-optimise tanks in contingencies.
             continue
