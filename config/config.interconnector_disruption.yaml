@@ -39,6 +39,11 @@ disruption:
       # The 1390 TWh biomass-import allowance is a scenario assumption, not data.
       enforce_allowances: true
       overrides: {}
+      # Dispatch-only solid-biomass import capacity (MW) for each regional delivery
+      # link and for the shared import supply. The reference keeps only its own peak
+      # (41 MW, DK0), so donor years with earlier-exhausted domestic allowances went
+      # infeasible near June (window 67 needs 5-10 GW). null keeps reference sizes.
+      import_capacity_MW: 50000
     storage:
       initial_state: base_previous_snapshot # Gas and other unlisted stores retain reference states.
       initial_inventory:
