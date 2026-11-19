@@ -150,6 +150,17 @@ Machine-readable results: [dispatch_2035_preflight.json](dispatch_2035_preflight
 
 ## Feasibility checks and failure diagnosis
 
+The first Sophia V2G baseline solved window 0 optimally, then stopped while
+building window 1 with `Constant values in objective function not supported`.
+This was a Linopy objective-construction error, not an infeasible model. The
+CO2 price now adds only the variable end-stock term to the solver objective;
+the fixed opening-stock offset is applied in the reported window objective.
+Net-emission premiums and dispatch incentives are preserved. Copy both
+`scripts/disruption_resource_budgets.py` and `scripts/rolling_disruption_dispatch.py`
+to Sophia before resubmitting affected jobs. The regression test covers three
+overlapping windows with zero and nonzero opening atmospheric stocks; a single
+opening-window test cannot exercise this failure path.
+
 `python -m scripts.check_2035_dispatch --variant w_V2G --build-window --output tmp/check_w_V2G.json`
 validates reference calendars/weights, interconnector parity, every outage,
 fixed household shares, frozen capacities, waste handling, fuel-budget duals,

@@ -270,6 +270,37 @@ def test_waste_hvc_arrivals_preserve_carbon_and_true_deadline():
     assert n.generators_t.p["waste supply"].eq(1).all()
 
 
+@pytest.mark.parametrize("initial_co2", [0, 7])
+def test_co2_price_with_carried_inventory_across_windows(initial_co2):
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2035-07-01", periods=6, freq="h"))
+    for name, carrier in (("power", "AC"), ("fuel", "fuel"), ("air", "co2")):
+        ref.add("Carrier", carrier)
+        ref.add("Bus", name, carrier=carrier)
+    ref.add("Load", "demand", bus="power", p_set=1)
+    ref.add("Generator", "fuel supply", bus="fuel", p_nom=10, marginal_cost=1)
+    ref.add("Generator", "clean", bus="power", p_nom=10, marginal_cost=100)
+    ref.add("Link", "dirty", bus0="fuel", bus1="power", bus2="air",
+            p_nom=10, efficiency=1, efficiency2=1)
+    ref.add("Store", "atmosphere", bus="air", carrier="co2",
+            e_nom=100, e_initial=initial_co2)
+    solve(ref)
+    # Synthetic reference carbon price: dirty supply costs 1 + 50 < 100.
+    ref.add("GlobalConstraint", "CO2Limit", type="co2_atmosphere", sense="<=", constant=10)
+    ref.global_constraints.at["CO2Limit", "mu"] = -50
+    n = ref.copy()
+    reports = run(n, ref)
+    assert len(reports["window_summary"]) == 3
+    np.testing.assert_allclose(reports["window_summary"].window_objective_EUR, [204, 204, 102])
+    np.testing.assert_allclose(n.generators_t.p["fuel supply"], 1)
+    np.testing.assert_allclose(n.generators_t.p["clean"], 0, atol=1e-7)
+    np.testing.assert_allclose(n.stores_t.e["atmosphere"], initial_co2 + np.arange(1, 7))
+    summary = reports["dispatch_summary"].iloc[0]
+    assert summary.net_emissions_tCO2 == pytest.approx(6)
+    assert summary.CO2_premium_EUR == pytest.approx(300)
+    assert summary.priced_dispatch_cost_EUR == pytest.approx(306)
+
+
 def test_co2_budget_becomes_price_without_changing_sequestration():
     from scripts.disruption_resource_budgets import replace_co2_budget
     n = pypsa.Network()

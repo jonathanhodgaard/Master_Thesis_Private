@@ -181,5 +181,7 @@ def add_co2_price(n, snapshots, price):
         raise ValueError("Cannot price net atmospheric emissions without an atmosphere Store.")
     # Existing operating carbon costs remain; this is the removed budget's premium.
     end = n.model["Store-e"].sel(snapshot=snapshots[-1], name=names).sum()
-    initial = float(n.stores.loc[names, "e_initial"].sum())
-    n.model.objective += price * (end - initial)
+    # Opening stock is fixed within the window, so subtracting its value does
+    # not change dispatch. Linopy rejects nonzero objective constants once CO2
+    # carries into later windows. Account for that offset in the reports only.
+    n.model.objective += price * end

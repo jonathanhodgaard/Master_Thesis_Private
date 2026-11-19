@@ -129,7 +129,9 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
         windows.append({"window": number, "optimization_start": str(window[0]),
                         "optimization_end": str(window[-1]), "implemented_start": str(implemented[0]),
                         "implemented_end": str(implemented[-1]), "implemented_hours": len(implemented),
-                        "window_objective_EUR": float(n.model.objective.value),
+                        # Restore the fixed CO2 opening-stock offset omitted
+                        # from the solver objective for Linopy compatibility.
+                        "window_objective_EUR": float(n.model.objective.value) - co2_price * initial_co2,
                         "operating_cost_EUR": cost, "MSV_charge_EUR": storage_charge,
                         "resource_charge_EUR": resource_charge,
                         "net_emissions_tCO2": emissions, "CO2_premium_EUR": emissions * co2_price})
