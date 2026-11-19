@@ -49,7 +49,7 @@ def fuel_reference(tmp_path, inventory=False):
     return n
 
 
-def run(n, ref, enforce=False, options=None):
+def run(n, ref, enforce=False, options=None, output_directory=None):
     config = configuration()
     from scripts import solve_network as solver
     model_kwargs, solve_kwargs = solver.collect_kwargs(config, config["solving"], [2025], mode="single")
@@ -62,7 +62,43 @@ def run(n, ref, enforce=False, options=None):
     }
     settings.update(options or {})
     return solve_rolling_dispatch(n, ref, config, SimpleNamespace(custom_extra_functionality=None),
-                                  model_kwargs, solve_kwargs, 2025, settings)
+                                  model_kwargs, solve_kwargs, 2025, settings,
+                                  output_directory=output_directory)
+
+
+def test_diagnostics_preserve_committed_progress_and_failed_window(tmp_path, monkeypatch):
+    import json
+    from scripts import solve_network as solver
+
+    ref = fuel_reference(tmp_path)
+    n = ref.copy()
+    original = solver.create_optimization_model
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("Injected second-window build failure")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(solver, "create_optimization_model", fail_second)
+    directory = tmp_path / "case"
+    with pytest.raises(RuntimeError, match="Injected second-window"):
+        run(n, ref, output_directory=directory)
+    pointer = json.loads((directory / "latest_diagnostics.json").read_text())
+    diagnostics = directory / pointer["directory"]
+    assert pointer["phase"] == "failed"
+    assert pointer["window"] == 1
+    assert "Injected second-window" in pointer["error"]
+    progress = pd.read_csv(diagnostics / "rolling_progress.csv")
+    assert progress.window.tolist() == [0]
+    ledger = pd.read_csv(diagnostics / "resource_ledger.csv")
+    assert set(ledger.window) == {0, 1}
+    assert ledger.loc[ledger.window.eq(1), "remaining_MWh"].iloc[0] == pytest.approx(
+        8 - n.generators_t.p.loc[ref.snapshots[:2], "bio"].sum())
+    assert (diagnostics / "config.json").is_file()
+    assert (diagnostics / "provenance.json").is_file()
 
 
 @pytest.mark.parametrize("enforce", [False, True])

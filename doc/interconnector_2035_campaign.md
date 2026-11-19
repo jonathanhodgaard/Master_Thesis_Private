@@ -1,5 +1,81 @@
 # 2035 interconnector dispatch tests on Sophia
 
+## All V2G cases across all five weather years: independent array
+
+`run_disruption_array_2035_w_V2G.sbatch` submits 40 independent tasks: five
+weather years times eight cases, including each year's no-outage baseline.
+Up to four tasks run concurrently, each on an exclusive 32-CPU node with a
+12-hour limit. A failed task stops only its own case; no dependency or cancellation
+is applied to the other tasks. The overall array can show FAILED even when its
+other tasks finish successfully, so inspect individual task states.
+
+Sync the new batch file and these three scripts to Sophia before submission:
+`scripts/disruption_diagnostics.py`, `scripts/rolling_disruption_dispatch.py`,
+and `scripts/solve_disruption_dispatch.py`. Physical settings are unchanged.
+All matching solved references, heat-share CSVs and four weather donors must exist.
+
+```bash
+cd /work/users/s203684/projects/Master_Thesis_Private
+source /home/s203684/miniforge3/etc/profile.d/conda.sh
+conda activate "$PWD/.conda-env"
+mkdir -p logs
+
+python -m scripts.run_disruption_campaign \
+  --configfiles config/config.sector_2035_w_V2G.yaml config/config.sophia.yaml \
+                config/config.interconnector_disruption.yaml \
+                config/config.interconnector_disruption_2035_w_V2G.yaml \
+  --years 2013-2014,1964-1965,1965-1966,1968-1969,1982-1983 --check-inputs
+
+sbatch run_disruption_array_2035_w_V2G.sbatch
+```
+
+Submit only after the input check succeeds. Replace `--check-inputs` with `--list`
+to print the exact task/year/case mapping. IDs 0–7 select 2013–2014, 8–15
+1964–1965, 16–23 1965–1966, 24–31 1968–1969, and 32–39 1982–1983. Within each
+year the order is `base_weather`, `se_interconnector`, `de_interconnector`,
+`dk1_interconnector`, `se_de_interconnector`, `se_dk1_interconnector`,
+`de_dk1_interconnector`, `eastern_denmark_all`.
+
+Completed up-to-date outputs are reused; the batch file includes
+`--rerun-incomplete`. Never run another job writing the same weather/case folder.
+Keep code, settings and case ordering fixed while the array is queued/running.
+Other variants and separate weather/case directories are independent.
+The array requests per-case plots only; shared comparison plots remain a separate
+postprocessing step. To limit concurrency to two nodes, use
+`sbatch --array=0-39%2 run_disruption_array_2035_w_V2G.sbatch`.
+
+```bash
+squeue -r -u "$USER"
+sacct -j ARRAY_ID --format=JobID,State,ExitCode,Elapsed,MaxRSS
+# Example: rerun only failed task 17 after diagnosing/fixing its cause.
+sbatch --array=17 run_disruption_array_2035_w_V2G.sbatch
+```
+
+### Persistent diagnostic records
+
+Under each `<weather>/<case>/`, `latest_diagnostics.json` points to a separate
+`diagnostics/<attempt>/` directory. A retry preserves the previous attempt.
+These files are not workflow outputs, so a failed Snakemake solve does not delete
+them:
+
+- `window_context.json`: current window, optimization/implemented dates, phase,
+  solver termination condition and Python traceback if an exception is caught.
+- `rolling_progress.csv`: successful implemented windows, written as they finish.
+- `resource_ledger.csv`: remaining allowances and prices at the start of every
+  attempted window, useful for detecting late-year resource exhaustion.
+- `storage_opening.csv`: Store/StorageUnit opening states for every attempted window.
+- `config.json` and `provenance.json`: effective configuration, Slurm IDs and code hashes.
+
+On Gurobi-reported infeasibility, the same attempt directory additionally receives
+`infeasibility_window_NNNN.txt`, the full `.constraints.txt`, `.ilp`, full-precision
+`.mps` and `.model.nc`, plus a copy of the failed window's solver log. The IIS
+search retains its 300-second limit and may be nonminimal/incomplete; the full
+model captures permit later replay. Main per-window logs and `dispatch.log` stay
+in the case folder; Slurm output/error logs identify their array/task IDs.
+An operating-system kill can prevent an exception/IIS report, but previously
+flushed progress, allowance and opening-state records remain. These records
+support diagnosis; they are not automatic restart checkpoints.
+
 Run from `/work/users/s203684/projects/Master_Thesis_Private` after copying the
 new files there. The two batch files select **one weather year per job** and
 run its eight cases sequentially, starting with `base_weather` (no outage).
