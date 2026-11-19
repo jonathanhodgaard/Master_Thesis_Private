@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 
 import yaml
 
@@ -81,6 +82,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="Print stable zero-based task mapping")
     parser.add_argument("--check-inputs", action="store_true", help="Check inputs for every selected task, then exit")
     parser.add_argument("--task-index", type=int, default=None)
+    parser.add_argument("--run-year", action="store_true",
+                        help="Run all selected cases sequentially for exactly one weather year; stop on failure")
     parser.add_argument("--cores", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     parser.add_argument("--dry-run", action="store_true")
     args, extra = parser.parse_known_args()
@@ -94,6 +97,20 @@ def main():
     if args.check_inputs:
         check_inputs(tasks)
         print(f"External inputs exist for all {len(tasks)} tasks.")
+        return
+    if args.run_year:
+        if len(args.years.split(",")) != 1 or args.task_index is not None or "SLURM_ARRAY_TASK_ID" in os.environ:
+            parser.error("--run-year requires exactly one year and no task index/Slurm array.")
+        check_inputs(tasks)
+        for index in range(len(tasks)):
+            command = [sys.executable, "-m", "scripts.run_disruption_campaign",
+                       "--configfiles", *args.configfiles, "--years", args.years,
+                       "--task-index", str(index), "--cores", str(args.cores)]
+            if args.cases:
+                command += ["--cases", args.cases]
+            if args.dry_run:
+                command.append("--dry-run")
+            subprocess.run(command + extra, check=True)
         return
     index = args.task_index
     if index is None and "SLURM_ARRAY_TASK_ID" in os.environ:

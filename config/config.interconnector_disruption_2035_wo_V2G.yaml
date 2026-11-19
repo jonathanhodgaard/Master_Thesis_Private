@@ -1,0 +1,19 @@
+# Load AFTER sector, Sophia and config.interconnector_disruption.yaml.
+# Inherit all eight 2025 cases, dates and rolling/solver assumptions.
+disruption:
+  base_network: results/sector_2035_wo_V2G/networks/base_s_10___2035.nc
+  household_shares: results/sector_2035_wo_V2G/csvs/household_heat_shares_base_s_10___2035.csv
+  planning_horizon: 2035
+  output_directory: results/disruptions/sector_2035_wo_V2G_interconnector_disruption
+  default_weather_year: "2013-2014"
+  weather_years:
+    "2013-2014":
+      weather_network: null
+    "1964-1965":
+      weather_network: resources/weather_1964_65/sector_2035_wo_V2G/networks/base_s_10___2035.nc
+    "1965-1966":
+      weather_network: resources/weather_1965_66/sector_2035_wo_V2G/networks/base_s_10___2035.nc
+    "1968-1969":
+      weather_network: resources/weather_1968_69/sector_2035_wo_V2G/networks/base_s_10___2035.nc
+    "1982-1983":
+      weather_network: resources/weather_1982_83/sector_2035_wo_V2G/networks/base_s_10___2035.nc

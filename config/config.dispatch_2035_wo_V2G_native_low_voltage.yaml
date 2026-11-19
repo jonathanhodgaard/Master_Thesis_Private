@@ -1,0 +1,6 @@
+# Optional LAST overlay: native distribution capacities, separate output tree.
+disruption:
+  low_voltage_capacity_multipliers:
+    FI: 1.0
+    SE: 1.0
+  output_directory: results/disruptions/sector_2035_wo_V2G_interconnector_native_low_voltage

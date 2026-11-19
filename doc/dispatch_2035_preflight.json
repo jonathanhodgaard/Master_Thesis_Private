@@ -1,0 +1,148 @@
+{
+  "date": "2026-11-19",
+  "tests": "13 passed",
+  "batch_syntax": "passed",
+  "original_weather_workflow_dry_runs": "both variants passed",
+  "local_gurobi": "unavailable: license username mismatch under execution account",
+  "sophia_submitted": false,
+  "reports": {
+    "dispatch_2035_preflight_w_V2G": {
+      "scenario": "sector_2035_w_V2G",
+      "weather_year": "2013-2014",
+      "case": "base_weather",
+      "status": "first_window_constructed",
+      "solved": false,
+      "transmission_equal_to_2025": true,
+      "transmission_asset_count": 47,
+      "all_eight_outage_cases_validated": true,
+      "new_link_carriers_vs_2025": [
+        "H2 Fuel Cell",
+        "Haber-Bosch",
+        "V2G",
+        "ammonia cracker",
+        "battery charger",
+        "battery discharger",
+        "biogas to gas CC",
+        "biomass-to-methanol",
+        "rural ground heat pump",
+        "shipping methanol",
+        "waste CHP CC"
+      ],
+      "co2_reference_price_EUR_per_t": 665.2255139959831,
+      "resource_budgets": 51,
+      "seasonal_storage_duals": 42,
+      "low_voltage_capacity_multipliers": {
+        "FI": 1.15,
+        "SE": 1.02
+      },
+      "limitations": "No optimization performed; later rolling windows and donor weather require Sophia solves.",
+      "window_hours": 168,
+      "variables": 345681,
+      "constraints": 757129
+    },
+    "dispatch_2035_preflight_wo_V2G": {
+      "scenario": "sector_2035_wo_V2G",
+      "weather_year": "2013-2014",
+      "case": "base_weather",
+      "status": "first_window_constructed",
+      "solved": false,
+      "transmission_equal_to_2025": true,
+      "transmission_asset_count": 47,
+      "all_eight_outage_cases_validated": true,
+      "new_link_carriers_vs_2025": [
+        "H2 Fuel Cell",
+        "Haber-Bosch",
+        "ammonia cracker",
+        "battery charger",
+        "battery discharger",
+        "biogas to gas CC",
+        "biomass-to-methanol",
+        "rural ground heat pump",
+        "shipping methanol",
+        "waste CHP CC"
+      ],
+      "co2_reference_price_EUR_per_t": 667.670038318785,
+      "resource_budgets": 51,
+      "seasonal_storage_duals": 42,
+      "low_voltage_capacity_multipliers": {
+        "FI": 1.15,
+        "SE": 1.02
+      },
+      "limitations": "No optimization performed; later rolling windows and donor weather require Sophia solves.",
+      "window_hours": 168,
+      "variables": 344001,
+      "constraints": 753769
+    },
+    "dispatch_2035_smoke_w_V2G_native": {
+      "scenario": "sector_2035_w_V2G",
+      "weather_year": "2013-2014",
+      "case": "base_weather",
+      "status": "ok",
+      "solved": false,
+      "transmission_equal_to_2025": true,
+      "transmission_asset_count": 47,
+      "all_eight_outage_cases_validated": true,
+      "new_link_carriers_vs_2025": [
+        "H2 Fuel Cell",
+        "Haber-Bosch",
+        "V2G",
+        "ammonia cracker",
+        "battery charger",
+        "battery discharger",
+        "biogas to gas CC",
+        "biomass-to-methanol",
+        "rural ground heat pump",
+        "shipping methanol",
+        "waste CHP CC"
+      ],
+      "co2_reference_price_EUR_per_t": 665.2255139959831,
+      "resource_budgets": 51,
+      "seasonal_storage_duals": 42,
+      "low_voltage_capacity_multipliers": {
+        "FI": 1.0,
+        "SE": 1.0
+      },
+      "limitations": "Only the opening 168-hour window tested; full-year/outage and donor feasibility still require Sophia solves.",
+      "window_hours": 168,
+      "variables": 345681,
+      "constraints": 757129,
+      "termination_condition": "time_limit",
+      "smoke_test_solver": "highs"
+    },
+    "dispatch_2035_smoke_wo_V2G_native": {
+      "scenario": "sector_2035_wo_V2G",
+      "weather_year": "2013-2014",
+      "case": "base_weather",
+      "status": "ok",
+      "solved": false,
+      "transmission_equal_to_2025": true,
+      "transmission_asset_count": 47,
+      "all_eight_outage_cases_validated": true,
+      "new_link_carriers_vs_2025": [
+        "H2 Fuel Cell",
+        "Haber-Bosch",
+        "ammonia cracker",
+        "battery charger",
+        "battery discharger",
+        "biogas to gas CC",
+        "biomass-to-methanol",
+        "rural ground heat pump",
+        "shipping methanol",
+        "waste CHP CC"
+      ],
+      "co2_reference_price_EUR_per_t": 667.670038318785,
+      "resource_budgets": 51,
+      "seasonal_storage_duals": 42,
+      "low_voltage_capacity_multipliers": {
+        "FI": 1.0,
+        "SE": 1.0
+      },
+      "limitations": "Only the opening 168-hour window tested; full-year/outage and donor feasibility still require Sophia solves.",
+      "window_hours": 168,
+      "variables": 344001,
+      "constraints": 753769,
+      "termination_condition": "time_limit",
+      "smoke_test_solver": "highs"
+    }
+  }
+}

@@ -1,4 +1,5 @@
-# Load after config.sector_2025.yaml and, on Sophia, config.sophia.yaml.
+# Load after the matching sector config and, on Sophia, config.sophia.yaml.
+# 2035 campaigns append their matching interconnector overlay after this file.
 # This replaces the stack of disruption/rolling overlays for new runs.
 # The donor weather network must already exist; do not load its build config.
 run:
