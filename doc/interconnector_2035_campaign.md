@@ -1,5 +1,24 @@
 # 2035 interconnector dispatch tests on Sophia
 
+## Without V2G: all cases and weather years
+
+`run_disruption_array_2035_wo_V2G.sbatch` is the matching without-V2G array.
+It uses the same 40-task mapping, four-task concurrency, resource allocation,
+failure isolation and shared diagnostic scripts described below. It selects the
+without-V2G reference, donors and output directory, so it can run alongside the
+V2G array without sharing case outputs. Both arrays together can use eight nodes.
+
+After syncing the batch file and the shared diagnostic scripts to Sophia:
+
+```bash
+cd /work/users/s203684/projects/Master_Thesis_Private
+mkdir -p logs
+sbatch run_disruption_array_2035_wo_V2G.sbatch
+```
+
+The input-check and task-list commands below also apply: replace both
+`2035_w_V2G` config names with `2035_wo_V2G`. Completed outputs are reused.
+
 ## All V2G cases across all five weather years: independent array
 
 `run_disruption_array_2035_w_V2G.sbatch` submits 40 independent tasks: five

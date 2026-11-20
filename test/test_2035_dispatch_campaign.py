@@ -11,19 +11,23 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "config/config.interconnector_disruption.yaml"
 
 
-def test_v2g_array_has_all_five_years_and_independent_case_tasks():
+@pytest.mark.parametrize("variant", ["w_V2G", "wo_V2G"])
+def test_v2g_array_has_all_five_years_and_independent_case_tasks(variant):
     import re
 
-    text = (ROOT / "run_disruption_array_2035_w_V2G.sbatch").read_text()
+    text = (ROOT / f"run_disruption_array_2035_{variant}.sbatch").read_text()
     years = re.search(r"--years ([\d,-]+)", text).group(1).split(",")
     assert years == ["2013-2014", *campaign.NEW_YEARS]
     assert "#SBATCH --array=0-39%4" in text
     assert "--run-year" not in text
-    config = campaign.load_config([COMMON, ROOT / "config/config.interconnector_disruption_2035_w_V2G.yaml"])
+    assert f"config/config.sector_2035_{variant}.yaml" in text
+    assert f"config/config.interconnector_disruption_2035_{variant}.yaml" in text
+    config = campaign.load_config([COMMON, ROOT / f"config/config.interconnector_disruption_2035_{variant}.yaml"])
     tasks = campaign.campaign_tasks(config, years)
     assert len(tasks) == 40
     assert len({task["target"] for task in tasks}) == 40
     assert [tasks[i]["year"] for i in (0, 8, 16, 24, 32)] == years
+    assert all(f"sector_2035_{variant}_interconnector_disruption/" in task["target"] for task in tasks)
 
 
 @pytest.mark.parametrize("variant", ["w_V2G", "wo_V2G"])
