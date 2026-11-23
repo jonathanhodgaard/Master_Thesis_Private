@@ -19,12 +19,13 @@ task_tmp_dir=$(mktemp -d "/scratch/${USER}-weather2035-${SLURM_JOB_ID}-XXXXXX")
 export TMPDIR="$task_tmp_dir" TMP="$task_tmp_dir" TEMP="$task_tmp_dir"
 
 # Build sequentially: preprocessing shares intermediate inputs.
-# Select one year with sbatch --export=ALL,WEATHER_YEARS=1964_65 ...
-for year in ${WEATHER_YEARS:-1964_65 1965_66 1968_69 1982_83}; do
+# Select one year with sbatch --export=ALL,WEATHER_YEARS=1965_66 ...
+for year in ${WEATHER_YEARS:-1965_66 1968_69 1988_89 1998_99}; do
   case "$year" in
-    1964_65|1965_66) cutout=europe-1961-1966-era5 ;;
+    1965_66) cutout=europe-1961-1966-era5 ;;
     1968_69) cutout=europe-1966-1971-era5 ;;
-    1982_83) cutout=europe-1981-1986-era5 ;;
+    1988_89) cutout=europe-1986-1991-era5 ;;
+    1998_99) cutout=europe-1996-2001-era5 ;;
     *) echo "Unsupported weather year: $year" >&2; exit 1 ;;
   esac
   test -r "data/cutout/archive/v1.0/${cutout}.nc"

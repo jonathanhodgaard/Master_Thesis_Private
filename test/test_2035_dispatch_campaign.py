@@ -1,4 +1,5 @@
 """2035 campaign parity, output isolation and one-year sequential execution."""
+from copy import deepcopy
 from pathlib import Path
 import subprocess
 import sys
@@ -37,8 +38,13 @@ def test_2035_inherits_all_2025_assumptions_and_uses_matching_inputs(variant):
     config = campaign.load_config([COMMON, overlay])
     current = config["disruption"]
     for key in ("cases", "rolling_horizon", "fuel_backup", "heat_vent", "load_shedding",
-                "low_voltage_capacity_multipliers", "plotting"):
+                "low_voltage_capacity_multipliers"):
         assert current[key] == base[key]
+    # 2035 intentionally uses its own scarcity threshold; all other plot
+    # settings still inherit from the common campaign.
+    expected_plotting = deepcopy(base["plotting"])
+    expected_plotting["heatmap"]["scarcity_price"] = 2000
+    assert current["plotting"] == expected_plotting
     assert f"sector_2035_{variant}/" in current["base_network"]
     tasks = campaign.campaign_tasks(config, ["2013-2014", *campaign.NEW_YEARS])
     assert len(tasks) == 40
@@ -75,7 +81,7 @@ def test_one_year_runs_in_case_order_and_stops_at_first_failure(monkeypatch):
 
 def test_one_year_rejects_multiple_weather_years(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["campaign", "--configfiles", str(COMMON),
-                                      "--years", "2013-2014,1964-1965", "--run-year"])
+                                      "--years", "2013-2014,1965-1966", "--run-year"])
     monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
     with pytest.raises(SystemExit):
         campaign.main()

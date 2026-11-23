@@ -16,14 +16,14 @@ disruption:
   weather_years:
     "2013-2014":
       weather_network: null # Original solved reference weather.
-    "1964-1965":
-      weather_network: resources/weather_1964_65/sector_2025/networks/base_s_10___2025.nc
     "1965-1966":
       weather_network: resources/weather_1965_66/sector_2025/networks/base_s_10___2025.nc
     "1968-1969":
       weather_network: resources/weather_1968_69/sector_2025/networks/base_s_10___2025.nc
-    "1982-1983":
-      weather_network: resources/weather_1982_83/sector_2025/networks/base_s_10___2025.nc
+    "1988-1989":
+      weather_network: resources/weather_1988_89/sector_2025/networks/base_s_10___2025.nc
+    "1998-1999":
+      weather_network: resources/weather_1998_99/sector_2025/networks/base_s_10___2025.nc
   iis_time_limit: 300
 
   rolling_horizon:

@@ -18,8 +18,8 @@ uses **calendar years**. The main text on pages 3-4 and Fig. 2 identify January
 | --- | --- |
 | 1965-1966 | Confirmed stress selection: includes the January 1966 wind/cold event. |
 | 1968-1969 | Confirmed stress selection: includes the December 1968 wind drought. |
-| 1964-1965 | Requested comparison year; not explicitly designated a “good year” in the main text. |
-| 1982-1983 | Requested comparison year; not explicitly designated a “good year” in the main text. |
+| 1988-1989 | Requested comparison year; not explicitly designated a “good year” in the main text. |
+| 1998-1999 | Requested comparison year; not explicitly designated a “good year” in the main text. |
 
 The paper does not establish this exact four-year set as a ranked two-good/two-bad
 sample. Its European net-zero system also differs from this seven-country 2025
@@ -73,16 +73,16 @@ overlay disables the weather-year layout so older saved networks remain usable.
 The config lists the required donor paths explicitly. They must already exist on
 Sophia and match the base's asset names, hourly calendar and snapshot weights.
 The existing `config.weather_1965_66.yaml` is retained. Additional build overlays
-are supplied for 1964-1965, 1968-1969 and 1982-1983. Load them **only when building
+are supplied for 1988-1989, 1968-1969 and 1998-1999. Load them **only when building
 donors**, after the sector/Sophia configs, without the disruption config.
 
-For example, preview the 1964-1965 donor preprocessing:
+For example, preview the 1988-1989 donor preprocessing:
 
 ```bash
 snakemake --dry-run --cores 1 \
-  resources/weather_1964_65/sector_2025/networks/base_s_10___2025.nc \
+  resources/weather_1988_89/sector_2025/networks/base_s_10___2025.nc \
   --configfiles config/config.sector_2025.yaml config/config.sophia.yaml \
-                config/config.weather_1964_65.yaml
+                config/config.weather_1988_89.yaml
 ```
 
 Repeat for the other year-specific overlays and targets. Run actual preprocessing
@@ -92,10 +92,10 @@ archived cutouts (`source: archive`, `version: v1.0`):
 
 | Weather period | Cutout under `data/cutout/archive/v1.0/` |
 | --- | --- |
-| 1964-1965 | `europe-1961-1966-era5.nc` |
+| 1988-1989 | `europe-1986-1991-era5.nc` |
 | 1965-1966 | `europe-1961-1966-era5.nc` |
 | 1968-1969 | `europe-1966-1971-era5.nc` |
-| 1982-1983 | `europe-1981-1986-era5.nc` |
+| 1998-1999 | `europe-1996-2001-era5.nc` |
 
 On Sophia these files can be symbolic links to `/groups/EXTREMES/cutouts/`.
 The snapshot settings select the July-June simulation period within each cutout;
@@ -121,7 +121,7 @@ cd /work/users/s203684/projects/Master_Thesis_Private
 source /home/s203684/miniforge3/etc/profile.d/conda.sh
 conda activate "$PWD/.conda-env"
 mkdir -p logs
-for year in 1964_65 1965_66 1968_69 1982_83; do
+for year in 1965_66 1968_69 1988_89 1998_99; do
   snakemake --dry-run --cores 1 \
     "resources/weather_${year}/sector_2025/networks/base_s_10___2025.nc" \
     --configfiles config/config.sector_2025.yaml config/config.sophia.yaml \
@@ -165,8 +165,8 @@ sbatch run_disruption_array.sbatch
 ```
 
 The array is `0-31%4`: 32 tasks, up to four concurrently, each requesting one
-exclusive workq node with 32 CPUs and a 12-hour limit. IDs 0-7 use 1964-1965,
-8-15 use 1965-1966, 16-23 use 1968-1969, and 24-31 use 1982-1983, with case order
+exclusive workq node with 32 CPUs and a 12-hour limit. IDs 0-7 use 1965-1966,
+8-15 use 1968-1969, 16-23 use 1988-1989, and 24-31 use 1998-1999, with case order
 printed by `--list`. Adjust the time request based on observed full-year case
 runtime. The inherited Gurobi setting remains eight threads per solve; requesting
 an exclusive node provides memory isolation, not an automatic 32-thread speedup.

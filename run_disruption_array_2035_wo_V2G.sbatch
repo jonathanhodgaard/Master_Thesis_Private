@@ -27,5 +27,5 @@ python -m scripts.run_disruption_campaign \
                 config/config.sophia.yaml \
                 config/config.interconnector_disruption.yaml \
                 config/config.interconnector_disruption_2035_wo_V2G.yaml \
-  --years 2013-2014,1964-1965,1965-1966,1968-1969,1982-1983 \
+  --years 2013-2014,1965-1966,1968-1969,1988-1989,1998-1999 \
   --rerun-incomplete "$@"

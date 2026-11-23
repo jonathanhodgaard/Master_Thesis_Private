@@ -36,8 +36,8 @@ def test_array_owns_disjoint_case_outputs_and_never_comparison_plots(config):
         directory = str(Path(task["target"]).parent).replace("\\", "/")
         assert all(target.startswith(directory + "/") for target in task_targets(task))
         assert all("missing_demand" not in target for target in task_targets(task))
-    assert tasks[0]["year"] == "1964-1965"
-    assert tasks[-1]["year"] == "1982-1983"
+    assert tasks[0]["year"] == "1965-1966"
+    assert tasks[-1]["year"] == "1998-1999"
 
 
 def test_reference_year_uses_base_weather(config):
