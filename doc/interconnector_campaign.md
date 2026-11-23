@@ -57,9 +57,9 @@ results/disruptions/sector_2025_interconnector_disruption/
       window_summary.csv
       solver_window_0000.log
       ... other reports and rolling-window logs ...
-      plots/
+      plots/  # one subfolder per plot type (dispatch_year, dispatch_zoom, ...)
     ... remaining interconnector cases ...
-    plots/  # comparisons of all cases in this weather year
+    plots/missing_demand/  # comparison of all cases in this weather year
 ```
 
 Cases sit directly under each weather year. Rolling-window reports and logs stay
@@ -227,6 +227,34 @@ snakemake plot_disruptions --cores 2 \
 ```
 
 Comparison plots and their summary/hourly CSVs appear under that weather year's `plots/`.
+
+## Resilience heatmaps across all weather years
+
+After all years are solved, run once (compute allocation, never sophia1). It never
+solves; cells without a solved network are grey `n/s`:
+
+```bash
+snakemake plot_disruption_heatmaps --cores 4 \
+  --allowed-rules disruption_case_metrics plot_disruption_heatmaps \
+  --rerun-triggers mtime \
+  --configfiles config/config.sector_2025.yaml config/config.sophia.yaml \
+                config/config.interconnector_disruption.yaml
+```
+
+Rows are the cases, columns the weather years. Two versions of every heatmap:
+`vs_same_year` = change against the no-outage case of the same weather year (the outage
+effect alone; no-outage row left out), and `vs_reference` = change against the 2013-2014 no-outage case (weather + outage, i.e. how bad the worst combination gets compared with a normal year; the reference cell is framed). DK2 metrics over one fixed window for all cases (`heatmap: window`,
+default 1 Dec - 1 Mar): unserved electricity (GWh), load-weighted electricity price
+in normal hours (% change), hours with load shedding in DK2, scarcity-priced hours
+without DK2 shedding (price at or above `heatmap: scarcity_price`, default 1000
+EUR/MWh, set by a neighbour's shortage or by storage next to a shedding hour), and
+consumer cost (price x DK2 demand, M€) split into normal and scarcity-priced hours. Plus the system-wide dispatch cost excluding
+load shedding for the whole run (needs `dispatch_summary.csv`). Output:
+`plots/heatmaps/heatmap_DK2_<metric>_{vs_same_year,vs_reference}.png` and `plots/heatmaps/resilience_metrics_DK2.csv`
+(absolute values, differences to the same-year base and to the 2013-2014 base,
+% change, plus unserved heat, shedding hours, peaks, mean/median/max price and
+emissions), per cell cached in `<year>/<case>/resilience_metrics.csv`. Options:
+`disruption: plotting: heatmap:`.
 
 References: [Sophia scheduler](https://dtu-sophia.github.io/docs/scheduler/) and
 [Slurm job arrays](https://slurm.schedmd.com/job_array.html).

@@ -118,7 +118,8 @@ POWER_RULES = [
     (r"OCGT|CCGT", "Gas turbines"),
     (r"coal|lignite", "Coal"),
     (r"heat pump|resistive heater", "Power-to-heat"),
-    (r"BEV charger|V2G", "EV charging"),
+    (r"BEV charger", "EV charging"),                # grid -> EV battery (driving + V2G later)
+    (r"V2G", "EV discharging (V2G)"),               # EV battery -> grid
     (r"battery", "Battery"),
     (r"H2|[Ee]lectrolysis|[Ff]uel [Cc]ell", "Hydrogen"),
     (r"distribution grid", "Electricity demand"),   # grid losses
@@ -144,13 +145,17 @@ DEMAND_GROUP = {"power": "Electricity demand", "heat": "Heat demand"}
 SUPPLY_ORDER = ["Nuclear", "Hydro", "Waste CHP", "Biomass CHP", "Biomass power", "Gas CHP",
                 "Coal", "Oil", "Gas turbines", "Gas boilers", "Biomass boilers", "Oil boilers",
                 "Heat pumps", "Resistive heaters",
-                "Offshore wind", "Onshore wind", "Solar", "Battery", "Hydrogen", "Thermal storage",
+                "Offshore wind", "Onshore wind", "Solar", "Battery", "EV discharging (V2G)", "Hydrogen", "Thermal storage",
                 "<interconnectors>", "Other", "Load shedding"]
 USE_ORDER = ["Electricity demand", "Heat demand", "Power-to-heat", "EV charging", "Hydrogen",
              "Battery", "Thermal storage", "<interconnectors>", "Other"]
 
 # storage only shifts energy that something else supplied: not a source, not a demand
 STORAGE_GROUPS = ["Thermal storage", "Battery"]
+# V2G gives back energy that EV charging took from the grid: no source either. In
+# missing_demand it is netted against EV charging, so the EV demand stays net.
+V2G_GROUP = "EV discharging (V2G)"
+NON_SOURCE_GROUPS = STORAGE_GROUPS + [V2G_GROUP]
 
 
 # ---- colours -------------------------------------------------------------------
@@ -183,6 +188,7 @@ COLOR_OVERRIDES = {
     # #8cdf85 / BEV charger #baf238
     "Resistive heaters": "#d8f9b8",      # PyPSA-Eur generic 'resistive heater'
     "EV charging": "#5fb3b3",
+    "EV discharging (V2G)": "#1f6f6f",   # darker shade of EV charging (PyPSA-Eur V2G #e5ffa8 too pale)
     "Biomass power": "#5f5b1d",          # PyPSA-Eur #baa741 ~ biomass CHP #9d9042
     "Other": "#d9d9d9",
 }
@@ -239,10 +245,13 @@ def region_balance(n, region, kind, shed_noise_mw=0.1):
 def missing_demand(bal):
     # Hourly unmet demand of a region balance.
     #   demand = everything used in the region except exports and storage charging
-    #            (power: fixed demand + power-to-heat + EVs + H2 + grid losses; heat: heat demand)
+    #            (power: fixed demand + power-to-heat + EVs (net of V2G) + H2 + grid losses; heat: heat demand)
     #   shed   = load shedding (the part of the demand that is not met)
     # Returns a DataFrame with shed_MW, demand_MW and missing_pct = shed / demand * 100.
     used = bal.drop(columns=interconnector_groups(bal) + STORAGE_GROUPS, errors="ignore")
+    if V2G_GROUP in used:   # net EV demand: charging minus V2G discharge, per hour
+        v2g = used.pop(V2G_GROUP)
+        used["EV charging"] = used.get("EV charging", 0.0) + v2g
     demand = -used.clip(upper=0).sum(axis=1)
     shed = bal["Load shedding"] if "Load shedding" in bal else pd.Series(0.0, index=bal.index)
     pct = (shed / demand.where(demand > 0) * 100).fillna(0.0)

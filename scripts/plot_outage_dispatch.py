@@ -6,12 +6,16 @@ own figure:
   - dispatch_year:  daily-mean dispatch over the whole run (supply above 0, use below 0)
   - dispatch_zoom:  hourly dispatch in short windows (summer vs. winter)
   - demand_shares:  share of the annual demand covered by each source + net imports
+  - production_shares: share of the annual local production by source (no imports)
 
-Each figure is written as PNG and PDF. Run by rules/plot_disruption.smk, or by hand::
+Figures have no titles: the file name says what they show. Each figure is written as PNG.
+Run by rules/plot_disruption.smk, or by hand (file names then use the network's
+folder name as the case)::
 
     python scripts/plot_outage_dispatch.py results/disruptions/network_solved.nc out_dir
 """
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -27,14 +31,14 @@ from matplotlib.patches import Patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.outage_helpers import (  # noqa: E402
-    FALLBACK_COLORS, IC_COLORS, KIND_TITLE, STORAGE_GROUPS, SUPPLY_ORDER, USE_ORDER,
+    FALLBACK_COLORS, IC_COLORS, NON_SOURCE_GROUPS, SUPPLY_ORDER, USE_ORDER,
     build_colors, interconnector_groups, is_interconnector, region_balance,
 )
 
 logger = logging.getLogger(__name__)
 
 KINDS = ("power", "heat")
-PLOTS = ("dispatch_year", "dispatch_zoom", "demand_shares")
+PLOTS = ("dispatch_year", "dispatch_zoom", "demand_shares", "production_shares")
 DEFAULTS = {
     "region": "DK0 0AC",
     "region_label": "DK2",
@@ -60,8 +64,9 @@ def _shedding_note(shed):
     return f"Load shedding: {shed.sum() / 1e3:,.1f} GWh, peak {shed.max():,.0f} MW, {len(shed)} h"
 
 
-def plot_balance(ax, bal, colors, resample="D", min_mw=1.0):
+def plot_balance(ax, bal, colors, resample="D", min_mw=1.0, note_loc="upper right"):
     # Two-sided stacked area: supply above 0, use below 0. resample=None -> hourly.
+    # note_loc: "upper right" or "lower right" for the load-shedding text box.
     # Returns legend handles (supply top-down, use).
     ics = interconnector_groups(bal)
     pos, neg = bal.clip(lower=0), bal.clip(upper=0)
@@ -94,7 +99,9 @@ def plot_balance(ax, bal, colors, resample="D", min_mw=1.0):
     ax.text(0.003, 0.03, "use", transform=ax.transAxes, va="bottom", fontsize=8, color="#666")
 
     shed = bal.get("Load shedding", pd.Series(0.0, index=bal.index))
-    ax.text(0.995, 0.97, _shedding_note(shed), transform=ax.transAxes, ha="right", va="top",
+    top = note_loc == "upper right"
+    ax.text(0.995, 0.97 if top else 0.03, _shedding_note(shed), transform=ax.transAxes,
+            ha="right", va="top" if top else "bottom",
             fontsize=8.5, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#cccccc"))
     days = shed[shed > 0].resample("D").max().dropna().index
     if resample and len(days):   # rug so short events stay visible after averaging
@@ -128,12 +135,26 @@ def add_split_legend(ax, supply, use, fontsize=8.5):
         ax.legend_ = wide
 
 
+def weather_year_offset(network, snapshots):
+    # Years between the weather year (folder name "<start>-<end>" above the case folder,
+    # e.g. .../1965-1966/<case>/network_solved.nc) and the model years of the snapshots.
+    # 0 when the folder is not a weather year. Only used to label the x-axis.
+    m = re.fullmatch(r"(\d{4})-\d{4}", Path(network).parent.parent.name)
+    return int(m.group(1)) - snapshots[0].year if m else 0
+
+
+def shift_years(bal, offset):
+    # Same hours, dates relabelled to the weather year (months and days unchanged).
+    if not offset:
+        return bal
+    out = bal.copy()
+    out.index = bal.index.map(lambda t: t.replace(year=t.year + offset))
+    return out
+
+
 def plot_year(bal, label, kind, colors, resample="D"):
     fig, ax = plt.subplots(figsize=(14, 4.8), constrained_layout=True)
-    supply, use = plot_balance(ax, bal, colors, resample)
-    ax.set_title(f"{label}: {KIND_TITLE[kind]} dispatch, "
-                 f"{bal.index[0]:%b %Y} – {bal.index[-1]:%b %Y}",
-                 loc="left", fontsize=12, fontweight="bold")
+    supply, use = plot_balance(ax, bal, colors, resample, note_loc="lower right")
     ax.set_ylabel("GW (daily mean)" if resample == "D" else f"GW ({resample} mean)")
     ax.set_xlim(bal.index[0], bal.index[-1])
     loc = mdates.MonthLocator()
@@ -167,6 +188,20 @@ def zoom_windows(index, windows):
     return out
 
 
+def worst_event_window(shed, index, days=14):
+    # Window of `days` days around the hour with the highest load shedding
+    # (7 days before, the rest after), kept inside the snapshots. None without shedding.
+    if shed.max() <= 0:
+        return None
+    peak = shed.idxmax()
+    start = (peak - pd.Timedelta(days=days // 2)).normalize()
+    start = max(start, index[0].normalize())
+    start = min(start, (index[-1] - pd.Timedelta(days=days - 1)).normalize())
+    end = start + pd.Timedelta(days=days - 1)
+    logger.info(f"worst shedding hour {peak} ({shed.max():.0f} MW): winter zoom {start:%Y-%m-%d} – {end:%Y-%m-%d}")
+    return f"{start:%Y-%m-%d}", f"{end:%Y-%m-%d}"
+
+
 def plot_zoom(bal, label, kind, colors, windows):
     # Hourly dispatch in a few short windows side by side, same y-scale.
     fig, axes = plt.subplots(1, len(windows), figsize=(14, 4.8), sharey=True,
@@ -177,15 +212,11 @@ def plot_zoom(bal, label, kind, colors, windows):
         s, u = plot_balance(ax, sub, colors, resample=None)
         supply.update(s)
         use.update(u)
-        ax.set_title(f"{name}: {sub.index[0]:%d %b %Y} – {sub.index[-1]:%d %b %Y}",
-                     loc="left", fontsize=10)
         ax.set_xlim(sub.index[0], sub.index[-1])
         ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
         ax.xaxis.set_minor_locator(mdates.DayLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     axes[0, 0].set_ylabel("GW (hourly)")
-    fig.suptitle(f"{label}: {KIND_TITLE[kind]} dispatch, " + " vs. ".join(windows).lower(),
-                 x=0.01, ha="left", fontsize=12, fontweight="bold")
 
     # merge the panels' legends: a group drawn above 0 in any panel counts as supply
     use = {g: h for g, h in use.items() if g not in supply}
@@ -211,75 +242,114 @@ def _pct(v):
 
 def demand_shares(bal):
     # Share (%) of the annual demand covered by each local source and by net imports.
-    # Demand = local generation + net imports + load shedding. Storage discharge is no source.
+    # Demand = local generation + net imports + load shedding. Storage and V2G discharge are no source.
     # Returns shares (%), demand (TWh), net flow per cable (TWh, + = import).
     ics = interconnector_groups(bal)
     cable_twh = bal[ics].sum() / 1e6
     net_imports = cable_twh.sum()
-    local = bal.drop(columns=ics + STORAGE_GROUPS, errors="ignore").clip(lower=0).sum() / 1e6
+    local = bal.drop(columns=ics + NON_SOURCE_GROUPS, errors="ignore").clip(lower=0).sum() / 1e6
     local = local[local > 0]
     demand = local.sum() + net_imports
 
     shares = local / demand * 100
     shares = shares[(shares >= 0.01) | (shares.index == "Load shedding")]
-    shares = shares[_ordered(shares.index, SUPPLY_ORDER, [])]
     if net_imports > 0:
-        shares = pd.concat([shares.drop("Load shedding", errors="ignore"),
-                            pd.Series({"Net imports": net_imports / demand * 100}),
-                            shares.loc[shares.index == "Load shedding"]])
-    return shares, demand, cable_twh
+        shares["Net imports"] = net_imports / demand * 100
+    return _largest_first(shares), demand, cable_twh
 
 
-def plot_shares(bal, label, kind, colors, min_inside=4.0):
-    shares, demand, cable_twh = demand_shares(bal)
-    net_imports = cable_twh.sum()
+def _largest_first(shares):
+    # largest share on the left, smallest on the right; load shedding always last
+    shed = shares.loc[shares.index == "Load shedding"]
+    return pd.concat([shares.drop("Load shedding", errors="ignore").sort_values(ascending=False),
+                      shed])
+
+
+def production_shares(bal):
+    # Share (%) of the region's own annual production by source: positive (supply) hours
+    # of every local group, summed over the year. Not included: imports (not produced
+    # here), load shedding (not produced), storage and V2G discharge (only shift energy).
+    # Returns shares (%), total production (TWh).
+    drop = interconnector_groups(bal) + NON_SOURCE_GROUPS + ["Load shedding"]
+    local = bal.drop(columns=drop, errors="ignore").clip(lower=0).sum() / 1e6
+    local = local[local > 0]
+    total = local.sum()
+    shares = local / total * 100
+    return _largest_first(shares[shares >= 0.01]), total
+
+
+def _share_bar(shares, colors, labels=None, min_inside=4.0):
+    # One horizontal 100 % bar, segments in the order of `shares`; labels: legend text
+    # per group (default "<group>  <share>"). Returns fig, ax, right end of the bar.
     extra = iter(FALLBACK_COLORS)
     color = {g: NET_IMPORT_COLOR if g == "Net imports" else colors.get(g) or next(extra)
              for g in shares.index}
-
     fig, ax = plt.subplots(figsize=(14, 2.6), constrained_layout=True)
     left = 0.0
     for g, v in shares.items():
         kw = dict(hatch="////", edgecolor=SHED_EDGE) if g == "Load shedding" else dict(edgecolor="white")
-        text = f"{g}  {_pct(v)}"
-        if g == "Net imports" and len(cable_twh):
-            text += "  (" + ", ".join(f"{c.split(' (')[0]} {t:+.1f}" for c, t in cable_twh.items()) + " TWh)"
+        text = (labels or {}).get(g, f"{g}  {_pct(v)}")
         ax.barh(0, v, left=left, height=0.6, color=color[g], linewidth=1.2, label=text, **kw)
         if v >= min_inside:
             ax.text(left + v / 2, 0, f"{v:.0f} %", ha="center", va="center",
                     fontsize=9, color=_text_color(color[g]))
         left += v
+    return fig, ax, left
 
-    title = (f"{label}: {KIND_TITLE[kind].lower()} demand by source, "
-             f"{bal.index[0]:%b %Y} – {bal.index[-1]:%b %Y} (demand {demand:,.1f} TWh)")
-    if net_imports < 0 and len(cable_twh):
-        ax.axvline(100, color="black", ls="--", lw=1)
-        ax.text(100, 0.42, " 100 % = demand", fontsize=8.5, va="bottom")
-        title += f"\nnet exporter: net exports = {-net_imports / demand * 100:.1f} % of demand"
-    ax.set_xlim(0, max(100.0, left))
+
+def _finish_bar(ax, right, n_items):
+    ax.set_xlim(0, max(100.0, right))
     ax.set_ylim(-0.45, 0.55)
     ax.set_yticks([])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0f} %"))
     for s in ("top", "right", "left"):
         ax.spines[s].set_visible(False)
-    ax.set_title(title, loc="left", fontsize=12, fontweight="bold")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.25), ncol=min(len(shares), 4),
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.25), ncol=min(n_items, 4),
               frameon=False, fontsize=8.5)
+
+
+def plot_production(bal, label, kind, colors):
+    # Share of the region's own production by source (largest left), see production_shares
+    shares, total = production_shares(bal)
+    labels = {g: f"{g}  {_pct(v)}  ({v * total / 100:,.2f} TWh)" for g, v in shares.items()}
+    fig, ax, right = _share_bar(shares, colors, labels)
+    logger.info(f"[{kind}] {label} annual production {total:,.2f} TWh")
+    _finish_bar(ax, right, len(shares))
+    return fig
+
+
+def plot_shares(bal, label, kind, colors, min_inside=4.0):
+    shares, demand, cable_twh = demand_shares(bal)
+    net_imports = cable_twh.sum()
+    labels = {}
+    if "Net imports" in shares and len(cable_twh):
+        labels["Net imports"] = (f"Net imports  {_pct(shares['Net imports'])}  ("
+                                 + ", ".join(f"{c.split(' (')[0]} {t:+.1f}"
+                                             for c, t in cable_twh.items()) + " TWh)")
+    fig, ax, left = _share_bar(shares, colors, labels, min_inside)
+
+    # no title: demand and net-export figures go to the log
+    logger.info(f"[{kind}] {label} annual demand {demand:,.2f} TWh, net imports "
+                f"{net_imports:+,.2f} TWh ({net_imports / demand * 100:+.1f} % of demand)")
+    if net_imports < 0 and len(cable_twh):
+        ax.axvline(100, color="black", ls="--", lw=1)
+        ax.text(100, 0.42, " 100 % = demand", fontsize=8.5, va="bottom")
+    _finish_bar(ax, left, len(shares))
     return fig
 
 
 # ---- driver -------------------------------------------------------------------------
 def save(fig, png):
-    # Save as PNG and as PDF next to it (same name).
+    # Save as PNG only.
     png = Path(png)
     png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(png, dpi=200, bbox_inches="tight")
-    fig.savefig(png.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
 
 
-def output_paths(out_dir, label):
-    return {(plot, kind): Path(out_dir) / f"{plot}_{label}_{kind}.png" for plot in PLOTS for kind in KINDS}
+def output_paths(out_dir, label, case):
+    return {(plot, kind): Path(out_dir) / plot / f"{plot}_{label}_{case}_{kind}.png"
+            for plot in PLOTS for kind in KINDS}
 
 
 def main(network, outputs, options):
@@ -287,13 +357,25 @@ def main(network, outputs, options):
     n = pypsa.Network(network)
     colors = build_colors(n)
     windows = zoom_windows(n.snapshots, options["zoom_windows"])
+    offset = weather_year_offset(network, n.snapshots)
+    logger.info(f"x-axis years shifted by {offset} (weather year labels)")
+    bals = {kind: region_balance(n, region, kind, options["shed_noise_mw"]) for kind in KINDS}
+    # winter zoom: around the worst electricity shedding hour of this case (same window for
+    # power and heat); without shedding the configured winter window stays
+    shed = bals["power"].get("Load shedding", pd.Series(0.0, index=n.snapshots))
+    worst = worst_event_window(shed, n.snapshots)
+    if worst:
+        windows = {k: v for k, v in windows.items() if k != "Winter"}
+        windows["Winter"] = worst
     for kind in KINDS:
-        bal = region_balance(n, region, kind, options["shed_noise_mw"])
+        bal = bals[kind]
         residual = bal.sum(axis=1).abs().max()
         logger.info(f"[{kind}] max hourly balance residual: {residual:.3f} MW")
-        save(plot_year(bal, label, kind, colors), outputs[("dispatch_year", kind)])
+        save(plot_year(shift_years(bal, offset), label, kind, colors),
+             outputs[("dispatch_year", kind)])
         save(plot_zoom(bal, label, kind, colors, windows), outputs[("dispatch_zoom", kind)])
         save(plot_shares(bal, label, kind, colors), outputs[("demand_shares", kind)])
+        save(plot_production(bal, label, kind, colors), outputs[("production_shares", kind)])
 
 
 if __name__ == "__main__":
@@ -307,4 +389,5 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
         if len(sys.argv) != 3:
             sys.exit(__doc__)
-        main(sys.argv[1], output_paths(sys.argv[2], DEFAULTS["region_label"]), DEFAULTS)
+        main(sys.argv[1], output_paths(sys.argv[2], DEFAULTS["region_label"], Path(sys.argv[1]).parent.name),
+             DEFAULTS)

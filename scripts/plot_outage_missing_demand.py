@@ -7,7 +7,8 @@ Made from missing_demand_plots.ipynb. For every hour:
 
 Demand = everything used in the region except exports and storage charging
 (electricity: fixed demand + power-to-heat + EVs + H2 + grid losses; heat: heat demand).
-One figure for electricity ("power"), one for heat, as PNG and PDF, plus
+One figure for electricity ("power"), one for heat, as PNG (no titles: the file
+name says what they show), plus
   - <stem>_summary.csv: per case and kind: unmet GWh, hours, peaks, share of annual demand
   - <stem>_hourly.csv:  hourly unmet % per kind and case
 
@@ -29,6 +30,7 @@ import pypsa
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.outage_helpers import KIND_TITLE, missing_demand, region_balance  # noqa: E402
+from scripts.plot_outage_dispatch import shift_years, weather_year_offset  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +96,6 @@ def plot_missing(results, kind, colors, region_label, resample=None):
     ax.set_axisbelow(True)
     for sp in ("top", "right"):
         ax.spines[sp].set_visible(False)
-    ax.set_title(f"{region_label}: unmet {KIND_TITLE[kind].lower()} demand per "
-                 f"{'hour' if not resample else 'day (max hour)'}, "
-                 f"{first[0]:%b %Y} – {first[-1]:%b %Y}",
-                 loc="left", fontsize=12, fontweight="bold")
     ax.legend(loc="upper left", bbox_to_anchor=(0.0, -0.08), ncol=1, frameon=False, fontsize=9)
     return fig
 
@@ -117,14 +115,20 @@ def main(networks, all_cases, outputs, options):
     results = {labels.get(c, c): load(p, options["region"], options["shed_noise_mw"])
                for c, p in networks.items()}
 
+    # x-axis labelled with the weather year (folder name); the CSVs keep the model timestamps
+    first = next(iter(results.values()))["power"].index
+    offset = weather_year_offset(next(iter(networks.values())), first)
+    logger.info(f"x-axis years shifted by {offset} (weather year labels)")
+    shown = {name: {k: shift_years(df, offset) for k, df in res.items()}
+             for name, res in results.items()}
+
     for kind in KINDS:
         assert all(r[kind].missing_pct.max() <= 100 + 1e-6 for r in results.values()), kind
-        fig = plot_missing(results, kind, colors, options["region_label"],
+        fig = plot_missing(shown, kind, colors, options["region_label"],
                            options.get("missing_demand_resample"))
         png = Path(outputs[kind])
         png.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(png, dpi=200, bbox_inches="tight")
-        fig.savefig(png.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
 
     table = pd.concat({KIND_TITLE[k]: summary(results, k) for k in KINDS}, names=["kind", "case"])
@@ -151,7 +155,7 @@ if __name__ == "__main__":
             sys.exit(__doc__)
         out_dir = Path(sys.argv[1])
         nets = dict(a.split("=", 1) for a in sys.argv[2:])
-        stem = out_dir / f"missing_demand_{DEFAULTS['region_label']}"
+        stem = out_dir / "missing_demand" / f"missing_demand_{DEFAULTS['region_label']}"
         outs = {"power": f"{stem}_power.png", "heat": f"{stem}_heat.png",
                 "summary": f"{stem}_summary.csv", "hourly": f"{stem}_hourly.csv"}
         main(nets, list(nets), outs, DEFAULTS)
