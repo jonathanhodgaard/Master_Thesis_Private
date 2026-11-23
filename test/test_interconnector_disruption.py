@@ -143,6 +143,8 @@ def test_consolidated_configuration():
     config = yaml.safe_load((root / "config/config.interconnector_disruption.yaml").read_text())
     settings = config["disruption"]
     rolling = settings["rolling_horizon"]
+    assert settings["low_voltage_capacity_multipliers"] == {"FI": 1.0, "SE": 1.0}
+    assert rolling["storage"]["msv"]["aggregation_by_carrier"]["urban central water pits"] == "monthly_mean"
     assert rolling["horizon"] > rolling["overlap"] >= 0
     assert settings["cases"]["base_weather"]["interconnector_outages"] == []
     for case in settings["cases"].values():

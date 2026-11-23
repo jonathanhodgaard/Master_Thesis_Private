@@ -32,7 +32,7 @@ def selected_storage(n, component, settings):
 
 
 def msv_profile(values, snapshots):
-    """Align hourly values or broadcast an annual mean to the requested hours."""
+    """Align time-varying values or broadcast an annual mean to requested hours."""
     if isinstance(values, pd.DataFrame):
         return values.loc[snapshots]
     return pd.DataFrame(np.tile(values.to_numpy(), (len(snapshots), 1)),
@@ -43,11 +43,12 @@ def apply_reference_msv(n, reference, options):
     """Add MSV once; return original cost inputs for separate physical-cost reporting."""
     validate_hourly_network(reference)
     aggregation = options.get("aggregation", "annual_mean")
-    if aggregation not in {"annual_mean", "hourly"}:
-        raise ValueError("MSV aggregation must be annual_mean or hourly.")
+    allowed_modes = {"annual_mean", "monthly_mean", "hourly"}
+    if aggregation not in allowed_modes:
+        raise ValueError("MSV aggregation must be annual_mean, monthly_mean or hourly.")
     overrides = options.get("aggregation_by_carrier", {})
-    if not isinstance(overrides, dict) or any(v not in {"annual_mean", "hourly"} for v in overrides.values()):
-        raise ValueError("MSV aggregation_by_carrier must map carriers to annual_mean or hourly.")
+    if not isinstance(overrides, dict) or any(v not in allowed_modes for v in overrides.values()):
+        raise ValueError("MSV aggregation_by_carrier must map carriers to annual_mean, monthly_mean or hourly.")
     if options.get("source", "mu_energy_balance") != "mu_energy_balance":
         raise ValueError("Supported MSV source is mu_energy_balance.")
     if len(n.snapshots.difference(reference.snapshots)):
@@ -67,21 +68,25 @@ def apply_reference_msv(n, reference, options):
         if not np.isfinite(annual.to_numpy()).all():
             raise ValueError(f"Nonfinite reference {component} storage-balance duals.")
         modes = n.components[component].static.loc[names, "carrier"].map(overrides).fillna(aggregation)
+        # Aggregate over the complete reference, before selecting dispatch hours.
+        # Calendar-month means retain seasonality without reference hourly detail.
+        profile = annual.copy()
+        for name in names:
+            if modes[name] == "annual_mean":
+                profile[name] = annual[name].mean()
+            elif modes[name] == "monthly_mean":
+                profile[name] = annual[name].groupby(annual.index.month).transform("mean")
         if modes.eq("annual_mean").all():
             values[component] = annual.mean()
         else:
-            profile = annual.loc[n.snapshots].copy()
-            averaged = names[modes.eq("annual_mean")]
-            for name in averaged:
-                profile[name] = annual[name].mean()
-            values[component] = profile
+            values[component] = profile.loc[n.snapshots]
         records.extend({"component": component, "asset": name,
                         "MSV_EUR_per_MWh_stored": float(value),
                         "reference_start": str(reference.snapshots[0]),
                         "reference_end": str(reference.snapshots[-1]),
                         "aggregation": modes[name],
-                        "minimum_MSV_EUR_per_MWh_stored": float(annual[name].min()) if modes[name] == "hourly" else float(value),
-                        "maximum_MSV_EUR_per_MWh_stored": float(annual[name].max()) if modes[name] == "hourly" else float(value)}
+                        "minimum_MSV_EUR_per_MWh_stored": float(profile[name].min()),
+                        "maximum_MSV_EUR_per_MWh_stored": float(profile[name].max())}
                        for name, value in annual.mean().items())
     # Snapshot the unmodified costs, including replacement inventory sources.
     original = {}

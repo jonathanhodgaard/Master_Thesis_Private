@@ -72,8 +72,19 @@ New rolling/disruption runs use **`config/config.interconnector_disruption.yaml`
 settings and cases, loaded after the separate sector configuration (and `config/config.sophia.yaml`
 on Sophia). It includes a matching baseline, single/combined winter interconnector outages,
 and an Eastern Denmark electrical-isolation case. Current settings use a 168-hour horizon,
-48-hour overlap (**120 hours implemented**), 168-hour waste periods, and fixed distribution-grid
-increases of 15% in Finland and 2% in Sweden. Existing heat vents are resized during preparation.
+48-hour overlap (**120 hours implemented**), 168-hour waste periods, original distribution-grid
+capacities, and monthly-average thermal-pit MSVs. Other selected storage MSVs retain their
+configured aggregation. Existing heat vents are resized during preparation.
+Selected fuel-delivery accounting links are doubled directly, preserving their original
+costs and emissions. The legacy `fuel_backup` setting adds no parallel links or price premium;
+its `capacity_multiplier: 1.0` means 100% additional capacity. Capacity adjustments are saved
+in network metadata; the retained `fuel_backup_dispatch.csv` has headers only.
+The 2025 and both 2035 sector configs cap Øresund AC exchange at 1,700 MW towards
+Sweden and 1,300 MW towards Zealand, retaining transmission losses. These limits
+are stored in base-network metadata and enforced again in every rolling window.
+They also freeze the additional western Denmark–Zealand gas-pipeline candidate at
+zero capacity; the existing 1,500 MW gas connection is unchanged. Rebuild and solve
+the base networks before running dispatch with these settings.
 Submit `sbatch run_dispatch_2025.sbatch` for all configured cases, or
 `sbatch --export=ALL,DISRUPTION_CASE=se_interconnector run_dispatch_2025.sbatch` for one case.
 The full reference year is simulated; outage start/end dates only control connection availability.

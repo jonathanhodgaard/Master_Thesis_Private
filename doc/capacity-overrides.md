@@ -112,3 +112,36 @@ bounds and insufficient potential fail with the rule name. Use disjoint rules;
 country and node rules selecting the same equipment are not order-dependent
 exceptions. The preparation log records component counts, before/after totals,
 units and expansion settings for every applied rule.
+
+## Directional Øresund limits and the Zealand gas candidate
+
+The three main sector configs use a flag-only Link override for
+`gas pipeline new DK0 0AC <-> DK2 0AC`, setting `extendable: false` before the
+base solve. This candidate starts at zero capacity. The override does not remove
+or resize the existing 1,500 MW gas pipeline, and does not block unrelated gas
+projects. Applying a flag-only rule to an already expanded solved network does
+not retire its capacity: rebuild the base network instead.
+
+Separately, `sector.directional_ac_limits` supports a list of rules:
+
+```yaml
+sector:
+  directional_ac_limits:
+    - name: oeresund
+      from_bus: "DK0 0AC"
+      to_bus: "SE0 0AC"
+      forward_mw: 1700
+      reverse_mw: 1300
+```
+
+Endpoints must resolve to exactly one aggregated AC Line after clustering.
+Limits are nonnegative MW; an empty list disables this feature during base
+preparation. A reversed stored Line orientation is handled automatically.
+Preparation saves resolved limits in `n.meta.directional_ac_limits`; the shared
+solve hook applies them to `Line-s` for base optimisation and rolling dispatch.
+Native thermal limits, impedance, Kirchhoff constraints, outages and loss
+equations remain active. The limits represent exchange-flow NTC assumptions,
+not verified sending-end or receiving-end ratings. With total loss L, sending
+power can exceed the exchange flow by L/2 and receiving power is smaller by L/2.
+The three configs explicitly retain `solving.options.transmission_losses: 2`.
+Configured limits that differ from prepared metadata cause a rebuild error.

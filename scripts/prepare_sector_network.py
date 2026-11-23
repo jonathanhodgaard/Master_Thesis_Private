@@ -46,6 +46,7 @@ from scripts.existing_capacity_nodes import (
     resolve_capacity_node,
 )
 from scripts.prepare_network import maybe_adjust_costs_and_potentials
+from scripts.directional_ac_limits import prepare_directional_ac_limits
 
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
@@ -7569,4 +7570,5 @@ if __name__ == "__main__":
     sanitize_carriers(n, snakemake.config)
     sanitize_locations(n)
 
+    prepare_directional_ac_limits(n, options.get("directional_ac_limits", []))
     n.export_to_netcdf(snakemake.output[0])

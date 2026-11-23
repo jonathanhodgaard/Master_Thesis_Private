@@ -379,6 +379,10 @@ class SectorConfig(BaseModel):
         default_factory=list,
         description="Capacity floors and expansion settings applied during sector network preparation.",
     )
+    directional_ac_limits: list[dict] = Field(
+        default_factory=list,
+        description="Directional AC exchange limits in MW, resolved during sector preparation and retained in dispatch metadata. Physical losses remain active.",
+    )
     transport: bool = Field(True, description="Flag to include transport sector.")
     heating: bool = Field(True, description="Flag to include heating sector.")
     biomass: bool = Field(True, description="Flag to include biomass sector.")

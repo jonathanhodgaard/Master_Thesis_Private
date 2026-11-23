@@ -40,7 +40,7 @@ def test_waste_buffer_crosses_windows_but_not_calendar_deadlines():
     assert reports["dispatch_summary"].net_emissions_tCO2.item() == pytest.approx(16)
 
 
-@pytest.mark.parametrize("aggregation", ["annual_mean", "hourly"])
+@pytest.mark.parametrize("aggregation", ["annual_mean", "monthly_mean", "hourly"])
 def test_hourly_store_bid_changes_dispatch_and_reports_exact_profile(aggregation):
     ref = pypsa.Network()
     ref.set_snapshots(pd.date_range("2025-07-01", periods=3, freq="h"))

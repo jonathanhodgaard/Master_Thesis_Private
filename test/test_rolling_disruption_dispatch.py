@@ -218,6 +218,39 @@ def run_store_continuity(ref):
     return reports
 
 
+@pytest.mark.parametrize("carrier_override", [False, True])
+def test_monthly_msv_uses_full_reference_months_and_preserves_other_modes(carrier_override):
+    ref = pypsa.Network()
+    ref.set_snapshots(pd.date_range("2025-01-30", periods=72, freq="h"))
+    ref.add("Bus", "heat")
+    for name, carrier in (("pit", "urban central water pits"), ("fuel", "gas"), ("battery", "battery")):
+        ref.add("Store", name, bus="heat", carrier=carrier, e_nom=100, marginal_cost=3)
+    ref.stores_t.mu_energy_balance["pit"] = np.arange(72, dtype=float)
+    ref.stores_t.mu_energy_balance["fuel"] = np.arange(72, dtype=float) + 10
+    n = ref.copy()
+    # Exclude part of January: its mean must still use all reference January hours.
+    n.set_snapshots(ref.snapshots[24:])
+    options = {
+        "aggregation": "hourly" if carrier_override else "monthly_mean",
+        "aggregation_by_carrier": {"gas": "annual_mean"},
+        "stores": {"carriers": ["urban central water pits", "gas"]},
+    }
+    if carrier_override:
+        options["aggregation_by_carrier"]["urban central water pits"] = "monthly_mean"
+    values, original = apply_annual_msv(n, ref, options)
+    expected = np.repeat([23.5, 59.5], 24)
+    np.testing.assert_allclose(values["Store"].pit, expected)
+    np.testing.assert_allclose(n.stores_t.marginal_cost.pit, 3 + expected)
+    np.testing.assert_allclose(values["Store"].fuel, 45.5)
+    assert "battery" not in values["Store"]
+    assert original["Store", "marginal_cost"].pit.eq(3).all()
+    record = next(r for r in n.meta["disruption_storage_msv"] if r["asset"] == "pit")
+    assert record["aggregation"] == "monthly_mean"
+    assert record["minimum_MSV_EUR_per_MWh_stored"] == 23.5
+    assert record["maximum_MSV_EUR_per_MWh_stored"] == 59.5
+    np.testing.assert_array_equal(ref.stores_t.mu_energy_balance.pit, np.arange(72))
+
+
 def test_configured_fuel_msv_prices_opening_stocks_against_new_supply():
     ref = pypsa.Network()
     ref.set_snapshots(pd.date_range("2025-07-01", periods=3, freq="h"))

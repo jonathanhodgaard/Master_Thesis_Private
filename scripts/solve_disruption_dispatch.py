@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def save_fuel_backup_dispatch(n, csv_path):
-    """Report backup use per link, labelled by fuel, country and end use."""
+    """Report legacy parallel backups; resized originals produce a header-only CSV."""
     rows = []
     weights = n.snapshot_weightings.generators
     for name, info in n.meta.get("fuel_backup_links", {}).items():

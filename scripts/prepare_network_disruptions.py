@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network, _clone
+from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network
 from scripts.heat_vent_capacity import prepare_dispatch_heat_vent_capacity
 
 
@@ -26,20 +26,27 @@ FUEL_ACCOUNTING_END_USES = {
 
 
 def add_fuel_backup_links(n, options):
-    """Parallel fuel-delivery accounting links; upstream fuel is still required."""
+    """Resize original accounting links; retain the legacy API/config name.
+
+    capacity_multiplier specifies additional capacity relative to the original,
+    as it did for parallel backups: 1.0 now doubles the original link directly.
+    No backup link or marginal-cost premium is added.
+    """
+    for name, info in n.meta.get("fuel_delivery_capacity_adjustments", {}).items():
+        if name in n.links.index:
+            for attr, value in info["original_capacities"].items():
+                n.links.at[name, attr] = value
     old = list(n.meta.get("fuel_backup_links", {}))
     n.remove("Link", n.links.index.intersection(old))
-    n.meta = {**n.meta, "fuel_backup_links": {}}
+    n.meta = {**n.meta, "fuel_backup_links": {}, "fuel_delivery_capacity_adjustments": {}}
     if not options.get("enable", False):
         return
     multiplier = float(options.get("capacity_multiplier", 1.0))
-    premium = float(options.get("marginal_cost_premium", 0.1))
-    if not np.isfinite([multiplier, premium]).all() or multiplier <= 0 or premium <= 0:
-        raise ValueError("Fuel backup multiplier and marginal cost premium must be positive and finite.")
+    if not np.isfinite(multiplier) or multiplier <= 0:
+        raise ValueError("Additional fuel-delivery capacity multiplier must be positive and finite.")
 
     carriers = options.get("carriers", list(FUEL_ACCOUNTING_END_USES))
     originals = n.links.index[n.links.carrier.isin(carriers)]
-    costs = n.get_switchable_as_dense("Link", "marginal_cost")
     metadata = {}
     for original in originals:
         row = n.links.loc[original]
@@ -47,33 +54,18 @@ def add_fuel_backup_links(n, options):
             raise ValueError(f"Invalid fixed fuel-delivery capacity: {original}")
         if row.p_nom == 0:
             continue
-        name = original + " fuel backup"
-        if name in n.links.index:
-            raise ValueError(f"Fuel backup name already exists: {name}")
-        carrier = "fuel backup " + row.carrier
-        if carrier not in n.carriers.index:
-            n.add("Carrier", carrier)
-        _clone(n, "Link", original, name, {
-            "carrier": carrier,
-            "p_nom": row.p_nom * multiplier,
-            "p_nom_extendable": False,
-            "p_nom_min": 0,
-            "p_nom_max": row.p_nom * multiplier,
-            "capital_cost": 0,
-            "marginal_cost": costs[original] + premium,
-        })
-        destination = n.buses.loc[row.bus1]
-        country = destination.get("country", "")
-        if not country:
-            location = str(destination.get("location", ""))
-            country = location[:2] if location[:2].isalpha() else "EU"
-        metadata[name] = {
-            "original_link": original,
-            "fuel": str(n.buses.at[row.bus0, "carrier"]),
-            "end_use": FUEL_ACCOUNTING_END_USES.get(row.carrier, row.carrier),
-            "country": country,
+        if row.p_nom_extendable:
+            raise ValueError(f"Fuel-delivery capacity must be fixed before resizing: {original}")
+        attrs = [attr for attr in ("p_nom", "p_nom_opt", "p_nom_min", "p_nom_max")
+                 if attr in n.links.columns]
+        capacities = {attr: float(row[attr]) for attr in attrs}
+        for attr, value in capacities.items():
+            n.links.at[original, attr] = value * (1 + multiplier)
+        metadata[original] = {
+            "original_capacities": capacities,
+            "capacity_multiplier": 1 + multiplier,
         }
-    n.meta = {**n.meta, "fuel_backup_links": metadata}
+    n.meta = {**n.meta, "fuel_delivery_capacity_adjustments": metadata}
 
 
 def assert_fixed_capacities(n):

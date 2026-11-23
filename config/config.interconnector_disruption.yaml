@@ -68,6 +68,7 @@ disruption:
         source: mu_energy_balance
         aggregation: hourly
         aggregation_by_carrier:
+          urban central water pits: monthly_mean
           gas: annual_mean
           biomass: annual_mean
           coal: annual_mean
@@ -92,19 +93,17 @@ disruption:
       initial_backlog_MWh: 0
       require_empty_at_period_end: true
 
-  # Fixed capacity sensitivity, applied before outages, in both flow directions.
-  # Current expansion settings: Finland +15%, Sweden +2%.
+  # Preserve the original distribution-grid capacities in both flow directions.
   low_voltage_capacity_multipliers:
-    FI: 1.15
-    SE: 1.02
+    FI: 1.0
+    SE: 1.0
   heat_vent:
     # Resize existing enabled vents to connected maximum heat-input capacities.
     # Applies in every case, including Finland and Sweden; retains disposal costs.
     resize_to_heat_input_capacity: true
-  fuel_backup:
+  fuel_backup: # Legacy name: resize original accounting links; no parallel backups.
     enable: true
-    capacity_multiplier: 1.0
-    marginal_cost_premium: 0.1
+    capacity_multiplier: 1.0 # Additional capacity: 1.0 doubles each selected link.
     carriers:
       - land transport oil
       - gas for industry

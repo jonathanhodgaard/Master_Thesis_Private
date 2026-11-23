@@ -43,8 +43,7 @@ disruption:
       require_empty_at_period_end: true
   fuel_backup:
     enable: true
-    capacity_multiplier: 1.0  # Backup capacity relative to the original fixed link.
-    marginal_cost_premium: 0.1  # EUR/MWh of fuel input, added to original link cost.
+    capacity_multiplier: 1.0  # Additional capacity: double original accounting links, no premium.
     # Accounting delivery only: exclude pipelines, boilers, and carbon-capture equipment.
     carriers:
       - land transport oil

@@ -57,6 +57,7 @@ from scripts.household_heat_constraints import (
     save_household_heat_shares,
 )
 from scripts.resource_budget_duals import save_resource_budget_duals
+from scripts.directional_ac_limits import add_directional_ac_limit_constraints
 from scripts.heat_vent_capacity import (
     add_heat_vent_capacity_constraints,
     prepare_heat_vent_capacity,
@@ -1317,6 +1318,7 @@ def extra_functionality(
     
     add_household_heat_constraints(n, snapshots)
     add_heat_vent_capacity_constraints(n)
+    add_directional_ac_limit_constraints(n, snapshots)
 
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
