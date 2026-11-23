@@ -15,6 +15,7 @@ from scripts.disruption_storage_msv import (
     initialize_storage, carry_storage, storage_boundary_losses, msv_cost, operating_cost,
 )
 from scripts.prepare_network_disruptions import assert_fixed_capacities
+from scripts.disruption_diagnostics import RollingDiagnostics
 
 RESOURCE_COLUMNS = ["window", "resource", "carrier", "allowance_MWh", "used_before_run_MWh",
                     "implemented_MWh", "used_in_run_MWh", "remaining_MWh", "exceedance_MWh",
@@ -82,6 +83,9 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     if imports.get("enable", False) and np.isfinite(imports.get("limit", np.inf)):
         raise ValueError("Finite aggregate green-import budgets need an explicit ledger adapter before rolling dispatch.")
     snapshots = simulation_period(n, options)
+    diagnostics = RollingDiagnostics(output_directory, config)
+    if diagnostics.directory is not None:
+        n.meta = {**n.meta, "rolling_diagnostics_directory": str(diagnostics.directory)}
     # Work on the prepared copy only; reference inputs and original base files are read-only.
     budgets = build_resource_budgets(n, reference, options.get("resources", {}), snapshots[0])
     co2_price = replace_co2_budget(n, reference, options.get("co2", {}).get("replace_budget_with_price", True))
@@ -101,43 +105,50 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     for number, start in enumerate(range(0, len(snapshots), step)):
         window = snapshots[start:start + horizon]
         implemented = window[:step]
-        initial_co2 = float(n.stores.loc[atmosphere, "e_initial"].sum())
-        with storage_boundary_losses(n, window[0]):
-            eur_solver.create_optimization_model(
-                n, deepcopy(config), params, model_kwargs, solve_kwargs,
-                planning_horizons=str(planning_horizon), snapshots=window,
-            )
-        add_resource_terms(n, window, budgets)
-        add_msv_charging_credit(n, window, values)
-        add_co2_price(n, window, co2_price)
-        kwargs = deepcopy(solve_kwargs)
-        if output_directory is not None:
-            directory = Path(output_directory)
-            directory.mkdir(parents=True, exist_ok=True)
-            kwargs["log_fn"] = str(directory / f"solver_window_{number:04d}.log")
-        status, condition = n.optimize.solve_model(**kwargs)
-        if status != "ok" or condition != "optimal":
-            if failure_callback is not None:
-                failure_callback(n, number, status, condition)
-            raise RuntimeError(f"Rolling window {number} did not solve optimally: {status}, {condition}")
-        rows = update_resource_counters(n, implemented, budgets, number)
-        resource_rows.extend(rows)
-        emissions = float(n.stores_t.e.loc[implemented[-1], atmosphere].sum() - initial_co2)
-        cost = operating_cost(n, implemented, original_costs)
-        storage_charge = msv_cost(n, implemented, values)
-        resource_charge = sum(row["scarcity_charge_EUR"] for row in rows)
-        windows.append({"window": number, "optimization_start": str(window[0]),
-                        "optimization_end": str(window[-1]), "implemented_start": str(implemented[0]),
-                        "implemented_end": str(implemented[-1]), "implemented_hours": len(implemented),
-                        "window_objective_EUR": float(n.model.objective.value),
-                        "operating_cost_EUR": cost, "MSV_charge_EUR": storage_charge,
-                        "resource_charge_EUR": resource_charge,
-                        "net_emissions_tCO2": emissions, "CO2_premium_EUR": emissions * co2_price})
-        for component, attr, frame in output_frames(n):
-            if not frame.empty:
-                committed.setdefault((component, attr), []).append(frame.loc[implemented].copy())
-        carry_storage(n, implemented[-1])
-        assert_fixed_capacities(n)
+        with diagnostics.window(n, number, window, implemented, budgets):
+            initial_co2 = float(n.stores.loc[atmosphere, "e_initial"].sum())
+            with storage_boundary_losses(n, window[0]):
+                eur_solver.create_optimization_model(
+                    n, deepcopy(config), params, model_kwargs, solve_kwargs,
+                    planning_horizons=str(planning_horizon), snapshots=window,
+                )
+            add_resource_terms(n, window, budgets)
+            add_msv_charging_credit(n, window, values)
+            add_co2_price(n, window, co2_price)
+            kwargs = deepcopy(solve_kwargs)
+            if output_directory is not None:
+                directory = Path(output_directory)
+                directory.mkdir(parents=True, exist_ok=True)
+                kwargs["log_fn"] = str(directory / f"solver_window_{number:04d}.log")
+            diagnostics.phase("solving")
+            status, condition = n.optimize.solve_model(**kwargs)
+            if status != "ok" or condition != "optimal":
+                diagnostics.phase("solve_failed", solver_status=str(status), termination_condition=str(condition))
+                if failure_callback is not None:
+                    failure_callback(n, number, status, condition)
+                raise RuntimeError(f"Rolling window {number} did not solve optimally: {status}, {condition}")
+            rows = update_resource_counters(n, implemented, budgets, number)
+            resource_rows.extend(rows)
+            emissions = float(n.stores_t.e.loc[implemented[-1], atmosphere].sum() - initial_co2)
+            cost = operating_cost(n, implemented, original_costs)
+            storage_charge = msv_cost(n, implemented, values)
+            resource_charge = sum(row["scarcity_charge_EUR"] for row in rows)
+            windows.append({"window": number, "optimization_start": str(window[0]),
+                            "optimization_end": str(window[-1]), "implemented_start": str(implemented[0]),
+                            "implemented_end": str(implemented[-1]), "implemented_hours": len(implemented),
+                            # Restore the fixed CO2 opening-stock offset omitted
+                            # from the solver objective for Linopy compatibility.
+                            "window_objective_EUR": float(n.model.objective.value) - co2_price * initial_co2,
+                            "operating_cost_EUR": cost, "MSV_charge_EUR": storage_charge,
+                            "resource_charge_EUR": resource_charge,
+                            "net_emissions_tCO2": emissions, "CO2_premium_EUR": emissions * co2_price})
+            for component, attr, frame in output_frames(n):
+                if not frame.empty:
+                    committed.setdefault((component, attr), []).append(frame.loc[implemented].copy())
+            carry_storage(n, implemented[-1])
+            assert_fixed_capacities(n)
+            diagnostics.committed(windows[-1])
+    diagnostics.phase("dispatch_solved")
     n.set_snapshots(snapshots)
     for (component, attr), frames in committed.items():
         n.components[component].dynamic[attr] = pd.concat(frames).reindex(snapshots)

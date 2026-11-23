@@ -2,6 +2,7 @@
 from pathlib import Path
 from contextlib import redirect_stdout
 import logging
+import shutil
 
 import pypsa
 import pandas as pd
@@ -57,6 +58,10 @@ def write_infeasibility_report(n, report_path, time_limit=300):
         solver_model.setParam("TimeLimit", time_limit)
         labels = n.model.compute_infeasibilities()
         solver_model.write(str(report_path.with_suffix(".ilp")))
+        full_report = report_path.with_suffix(".constraints.txt")
+        with full_report.open("w", encoding="utf-8") as stream:
+            with redirect_stdout(stream):
+                n.model.constraints.print_labels(labels)
         with report_path.open("w", encoding="utf-8") as stream:
             stream.write(
                 f"Conflicting constraint labels: {len(labels)}\n"
@@ -65,6 +70,7 @@ def write_infeasibility_report(n, report_path, time_limit=300):
                 "Complete model captures: " + ", ".join(captures) + "\n"
                 "The .ilp may round fixed bounds; use the complete captures for replay.\n"
                 "The first equations are in model order, not ranked by cause.\n"
+                f"All conflicting equations: {full_report.name}\n"
                 "First 100 conflicting equations (base-network date labels):\n"
             )
             with redirect_stdout(stream):
@@ -106,10 +112,14 @@ if __name__ == "__main__":
 
         def on_failure(network, number, status, condition):
             if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
+                failure_directory = Path(network.meta.get("rolling_diagnostics_directory", directory))
                 write_infeasibility_report(
-                    network, directory / f"infeasibility_window_{number:04d}.txt",
+                    network, failure_directory / f"infeasibility_window_{number:04d}.txt",
                     snakemake.config["disruption"].get("iis_time_limit", 300),
                 )
+                log = directory / f"solver_window_{number:04d}.log"
+                if log.is_file():
+                    shutil.copy2(log, failure_directory / log.name)
 
         reports = solve_rolling_dispatch(
             n, pypsa.Network(snakemake.input.reference), snakemake.config,

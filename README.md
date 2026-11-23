@@ -81,6 +81,8 @@ Results go to `results/disruptions/sector_2025_interconnector_disruption/<weathe
 For the four additional weather years, donor setup, independent Sophia array jobs,
 weather-year folders and the Gøtske year-selection check, see
 [the interconnector campaign guide](doc/interconnector_campaign.md).
+For matching 2035 V2G/without-V2G tests, original weather first and then one
+weather year per batch job, see [the 2035 campaign guide](doc/interconnector_2035_campaign.md).
 Solid-biomass Stores start empty in every modelled country; subsequent domestic supply is capped
 by the annual potential and priced with the reference scarcity premium. Supply is not compulsory.
 Imports and interregional biomass transport retain their frozen delivery capacities.
