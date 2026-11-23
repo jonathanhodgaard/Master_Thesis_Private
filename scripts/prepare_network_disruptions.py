@@ -194,7 +194,9 @@ def household_demands(n):
         n.links.at[delivery, "p_nom"] = max(n.links.at[delivery, "p_nom"], demand.max())
     return demands
 
-def add_load_shedding(n, elec_cost=10_000, heat_cost=10_000):
+def add_load_shedding(
+    n, elec_cost=10_000, heat_cost=10_000, regional_cost_adders=None
+):
     # Includes both static and time-varying load values.
     demand = n.get_switchable_as_dense("Load", "p_set")
 
@@ -235,6 +237,12 @@ def add_load_shedding(n, elec_cost=10_000, heat_cost=10_000):
         if carrier not in n.carriers.index:
             n.add("Carrier", carrier)
 
+        regional_adders = (
+            n.buses.loc[buses, "location"]
+            .map(regional_cost_adders or {})
+            .fillna(0.0)
+        )
+
         n.add(
             "Generator",
             buses,
@@ -243,7 +251,7 @@ def add_load_shedding(n, elec_cost=10_000, heat_cost=10_000):
             carrier=carrier,
             p_nom=peak_demand.reindex(buses).to_numpy(),
             p_nom_extendable=False,
-            marginal_cost=cost,
+            marginal_cost=(cost + regional_adders).to_numpy(),
             sign=1.0,
             p_max_pu=(demand_by_bus[buses].clip(lower=0) / peak_demand[buses]).to_numpy(),
         )

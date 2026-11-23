@@ -117,6 +117,8 @@ disruption:
   load_shedding:
     elec_cost: 23300 # DEA VoLL Denmark (2023)
     heat_cost: 100000 # Gøtske (2024)
+    regional_cost_adders:
+      "DK0 0AC": 100 # EUR/MWh extra for Eastern Denmark electricity and heat
 
   # Outage plots (rules/plot_disruption.smk), made after each case is solved.
   # Under each weather year: {case}/plots/ and comparison plots in plots/.
