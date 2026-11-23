@@ -125,6 +125,10 @@ disruption:
     region: DK0 0AC          # model cluster DK0 = Zealand (bidding zone DK2); cluster DK2 = Jutland
     region_label: DK2        # used in titles and file names
     shed_noise_mw: 0.1       # hourly load shedding below this is solver noise and set to 0
+    # households in the region, for the event table's household equivalent (= share of
+    # demand shed x households). Approx. Capital Region (incl. Bornholm) + Region Zealand,
+    # ~2.75 M people / ~2.1 per household; replace with Statistics Denmark (FAM55N).
+    households: 1300000
     zoom_windows:            # hourly zoom; windows outside the snapshots are skipped
       Summer: ["2013-07-08", "2013-07-21"]
       Winter: ["2014-01-13", "2014-01-26"]
@@ -139,6 +143,12 @@ disruption:
       de_dk1_interconnector: Kontek + Great Belt out
       eastern_denmark_all: All 3 out
     existing_only: false     # true: plot only cases whose solved network exists (never solve)
+    # Case x weather-year heatmaps (snakemake plot_disruption_heatmaps, after the array).
+    heatmap:
+      reference_weather_year: null   # null = default_weather_year
+      reference_case: base_weather   # also the same-year control for vs_same_year
+      window: ["2013-12-01", "2014-03-01"]  # same for every case (end exclusive): longest outage
+      scarcity_price: 1000           # EUR/MWh; at or above = scarcity hour (normal prices < ~300)
 
   # dispatch_disruptions runs every case listed here with shared settings above.
   # Each case can combine a prepared donor weather network and multiple outages.

@@ -66,8 +66,12 @@ def task_targets(task):
     if plotting.get("enable", True):
         label = plotting.get("region_label", "DK2")
         directory = f"{settings['output_directory']}/{task['case']}/plots"
-        targets += [f"{directory}/{plot}_{label}_{kind}.png"
-                    for plot in ("dispatch_year", "dispatch_zoom", "demand_shares")
+        # Same paths as case_plot_file() in rules/plot_disruption.smk:
+        # plots/<plot>/<plot>_<label>_<case>_<year>_<kind>.png
+        year = settings.get("selected_weather_year")
+        tag = f"{task['case']}_{year}" if year else task["case"]
+        targets += [f"{directory}/{plot}/{plot}_{label}_{tag}_{kind}.png"
+                    for plot in ("dispatch_year", "dispatch_zoom", "demand_shares", "production_shares")
                     for kind in ("power", "heat")]
     # Comparison plots are deliberately a separate, post-array invocation.
     return targets
