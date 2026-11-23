@@ -17,3 +17,8 @@ disruption:
       weather_network: resources/weather_1968_69/sector_2035_w_V2G/networks/base_s_10___2035.nc
     "1982-1983":
       weather_network: resources/weather_1982_83/sector_2035_w_V2G/networks/base_s_10___2035.nc
+  plotting:
+    heatmap:
+      # 2035 normal prices reach ~800 EUR/MWh (CO2 price), scarcity prices start at
+      # ~18,000 EUR/MWh: 2000 sits in the empty gap (2025 keeps 1000)
+      scarcity_price: 2000

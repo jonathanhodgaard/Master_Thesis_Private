@@ -30,8 +30,9 @@ metrics use one fixed window for every case (plotting.heatmap.window, default
                                 load-shedding cost. NaN without a summary file.
   plus extra columns for the summary table (peaks, hours, mean/median/max price, CO2).
 
-Normal prices stay below ~300 EUR/MWh and scarcity prices are near VoLL (thousands of
-EUR/MWh) with nothing in between, so any cut-off in that gap gives the same split.
+Normal prices stay below ~300 EUR/MWh in 2025 (~800 EUR/MWh in 2035, higher CO2 price)
+and scarcity prices are near VoLL (thousands of EUR/MWh) with nothing in between, so any
+cut-off in that gap gives the same split (2035 overlays use 2000 EUR/MWh).
 
 Heatmaps (one PNG per metric, no titles; the file name says what): each cell minus the
 no-outage case (plotting.heatmap.reference_case) of the SAME weather year = the outage
@@ -61,9 +62,9 @@ logger = logging.getLogger(__name__)
 SHEDDING_CARRIERS = ("load-shedding-electricity", "load-shedding-heat")
 DEFAULT_WINDOW = ("2013-12-01", "2014-03-01")   # end exclusive
 DEFAULT_SCARCITY_PRICE = 1000.0                 # EUR/MWh
-# Gap check: hours priced within this factor of the cut-off (cut-off / 3 ... cut-off x 3)
+# Gap check: hours priced within this factor of the cut-off (cut-off / 2 ... cut-off x 2)
 # make the normal/scarcity split depend on the exact cut-off -> warning in the log.
-GAP_FACTOR = 3.0
+GAP_FACTOR = 2.0
 
 # metric key -> (column in resilience_metrics.csv, colour-bar label, cell format, change)
 # change: "abs" = cell minus same-year base, "pct" = (cell / same-year base - 1) * 100.

@@ -17,7 +17,12 @@ Reads every {output_directory}/{weather_year}/{case}/network_solved.nc that exis
 Metrics are cached in the output CSV; a network is only reloaded when it is new or
 its file changed. Run from the repository root::
 
-    pixi run python scripts/plot_disruption_spread.py [config.yaml]
+    pixi run python scripts/plot_disruption_spread.py [config.yaml ...]
+
+Several config files are merged in the given order (later files win, nested keys merged),
+like Snakemake's --configfiles. 2035 example (same for wo_V2G)::
+
+    pixi run python scripts/plot_disruption_spread.py config/config.interconnector_disruption.yaml config/config.interconnector_disruption_2035_w_V2G.yaml
 """
 import sys
 from pathlib import Path
@@ -685,8 +690,23 @@ def comp_plot(results, cases, labels, solved, min_share=1.0, min_inside=4.0):
     return fig
 
 
-def main(config_path=CONFIG):
-    cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))["disruption"]
+def merge(base, extra):
+    # nested dict merge, later file wins (as Snakemake does for --configfiles)
+    out = dict(base)
+    for k, v in (extra or {}).items():
+        out[k] = merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def load_config(paths):
+    cfg = {}
+    for path in paths:
+        cfg = merge(cfg, yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+    return cfg
+
+
+def main(*config_paths):
+    cfg = load_config(config_paths or [CONFIG])["disruption"]
     opts = cfg.get("plotting", {})
     region, label = opts.get("region", "DK0 0AC"), opts.get("region_label", "DK2")
     reference = cfg.get("default_weather_year")
@@ -811,4 +831,4 @@ def main(config_path=CONFIG):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:2])
+    main(*sys.argv[1:])
