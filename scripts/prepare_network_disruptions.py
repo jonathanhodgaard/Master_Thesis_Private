@@ -5,6 +5,7 @@ from pathlib import Path
 
 from scripts.household_heat_constraints import META_KEY, freeze_household_heat_network
 from scripts.heat_vent_capacity import prepare_dispatch_heat_vent_capacity
+from scripts.fuel_demand_shedding import add_fuel_demand_shedding
 
 
 CAPACITIES = {
@@ -195,7 +196,7 @@ def household_demands(n):
     return demands
 
 def add_load_shedding(
-    n, elec_cost=10_000, heat_cost=10_000, regional_cost_adders=None
+    n, elec_cost=10_000, heat_cost=10_000, regional_cost_adders=None, fuel=None
 ):
     # Includes both static and time-varying load values.
     demand = n.get_switchable_as_dense("Load", "p_set")
@@ -255,6 +256,8 @@ def add_load_shedding(
             sign=1.0,
             p_max_pu=(demand_by_bus[buses].clip(lower=0) / peak_demand[buses]).to_numpy(),
         )
+
+    add_fuel_demand_shedding(n, fuel)
 
 
 if __name__ == "__main__":

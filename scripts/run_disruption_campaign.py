@@ -63,6 +63,10 @@ def check_inputs(tasks):
 def task_targets(task):
     targets = [task["target"]]
     settings = task["settings"]
+    directory = f"{settings['output_directory']}/{task['case']}"
+    targets += [f"{directory}/{report}.csv" for report in
+                ("fuel_shedding_by_demand", "fuel_shedding_by_fuel", "fuel_shedding_timeseries",
+                 "fuel_generator_disruptions", "fuel_link_disruptions")]
     plotting = settings.get("plotting", {})
     if plotting.get("enable", True):
         label = plotting.get("region_label", "DK2")
@@ -78,9 +82,9 @@ def task_targets(task):
     return targets
 
 
-def main():
+def main(argv=None, default_configfiles=None):
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("--configfiles", nargs="+", default=CONFIGFILES)
+    parser.add_argument("--configfiles", nargs="+", default=default_configfiles or CONFIGFILES)
     parser.add_argument("--years", default=",".join(NEW_YEARS), help="Comma-separated July-June years")
     parser.add_argument("--cases", help="Comma-separated case names; default: all configured cases")
     parser.add_argument("--list", action="store_true", help="Print stable zero-based task mapping")
@@ -90,7 +94,7 @@ def main():
                         help="Run all selected cases sequentially for exactly one weather year; stop on failure")
     parser.add_argument("--cores", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     parser.add_argument("--dry-run", action="store_true")
-    args, extra = parser.parse_known_args()
+    args, extra = parser.parse_known_args(argv)
     config = load_config(args.configfiles)
     tasks = campaign_tasks(config, args.years.split(","),
                            args.cases.split(",") if args.cases else None)

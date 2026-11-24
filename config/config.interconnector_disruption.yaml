@@ -40,11 +40,9 @@ disruption:
       # The 1390 TWh biomass-import allowance is a scenario assumption, not data.
       enforce_allowances: true
       overrides: {}
-      # Dispatch-only solid-biomass import capacity (MW) for each regional delivery
-      # link and for the shared import supply. The reference keeps only its own peak
-      # (41 MW, DK0), so donor years with earlier-exhausted domestic allowances went
-      # infeasible near June (window 67 needs 5-10 GW). null keeps reference sizes.
-      import_capacity_MW: 50000
+      # Preserve optimized import delivery capacities; final-demand shedding
+      # measures shortages without adding import infrastructure.
+      import_capacity_MW: null
     storage:
       initial_state: base_previous_snapshot # Gas and other unlisted stores retain reference states.
       initial_inventory:
@@ -101,22 +99,21 @@ disruption:
     # Resize existing enabled vents to connected maximum heat-input capacities.
     # Applies in every case, including Finland and Sweden; retains disposal costs.
     resize_to_heat_input_capacity: true
-  fuel_backup: # Legacy name: resize original accounting links; no parallel backups.
-    enable: true
-    capacity_multiplier: 1.0 # Additional capacity: 1.0 doubles each selected link.
-    carriers:
-      - land transport oil
-      - gas for industry
-      - coal for industry
-      - solid biomass for industry
-      - industry methanol
-      - kerosene for aviation
-      - shipping oil
-      - shipping methanol
-      - agriculture machinery oil
+  fuel_backup:
+    enable: false # Preserve original fuel delivery capacities; remove legacy backups.
   load_shedding:
     elec_cost: 23300 # DEA VoLL Denmark (2023)
     heat_cost: 100000 # Gøtske (2024)
+    fuel:
+      enable: true
+      # EUR/MWh of unmet FINAL fuel demand; modelling assumption, not calibrated VoLL.
+      default_cost: 23300
+      # Priority: individual Load > demand bus carrier > fuel > default, then adder.
+      costs_by_fuel: {} # e.g. {biomass: 30000, gas: 25000, oil: 23300}
+      costs_by_carrier: {} # e.g. {solid biomass for industry: 30000}
+      costs_by_load: {} # e.g. {DK0 0AC solid biomass for industry: 35000}
+      regional_cost_adders: {} # Exact bus location, e.g. {DK0 0AC: 100}
+      demand_carriers: {} # Optional extra bus-carrier -> fuel classification.
     regional_cost_adders:
       "DK0 0AC": 100 # EUR/MWh extra for Eastern Denmark electricity and heat
 
