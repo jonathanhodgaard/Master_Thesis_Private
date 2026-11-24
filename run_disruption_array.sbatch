@@ -19,7 +19,7 @@ test -w /scratch
 task_tmp_dir=$(mktemp -d "/scratch/${USER}-${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_TASK_ID}-XXXXXX")
 export TMPDIR="$task_tmp_dir" TMP="$task_tmp_dir" TEMP="$task_tmp_dir"
 
-# 1965-1966, 1968-1969, 1988-1989, 1998-1999 x eight cases.
+# 1965-1966, 1968-1969, 1988-1989, 2019-2020 x eight cases.
 # At most four independent nodes concurrently.
 # Each task owns its case outputs; rolling windows inside it remain sequential.
 # Change --array when changing --years/--cases. Run --list and --check-inputs first.

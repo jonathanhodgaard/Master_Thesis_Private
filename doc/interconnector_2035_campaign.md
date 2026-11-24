@@ -43,14 +43,14 @@ python -m scripts.run_disruption_campaign \
   --configfiles config/config.sector_2035_w_V2G.yaml config/config.sophia.yaml \
                 config/config.interconnector_disruption.yaml \
                 config/config.interconnector_disruption_2035_w_V2G.yaml \
-  --years 2013-2014,1965-1966,1968-1969,1988-1989,1998-1999 --check-inputs
+  --years 2013-2014,1965-1966,1968-1969,1988-1989,2019-2020 --check-inputs
 
 sbatch run_disruption_array_2035_w_V2G.sbatch
 ```
 
 Submit only after the input check succeeds. Replace `--check-inputs` with `--list`
 to print the exact task/year/case mapping. IDs 0–7 select 2013–2014, 8–15
-1965–1966, 16–23 1968–1969, 24–31 1988–1989, and 32–39 1998–1999. Within each
+1965–1966, 16–23 1968–1969, 24–31 1988–1989, and 32–39 2019–2020. Within each
 year the order is `base_weather`, `se_interconnector`, `de_interconnector`,
 `dk1_interconnector`, `se_de_interconnector`, `se_dk1_interconnector`,
 `de_dk1_interconnector`, `eastern_denmark_all`.
@@ -188,7 +188,7 @@ To build only the next weather year for both variants:
 sbatch --export=ALL,WEATHER_YEARS=1965_66 run_weather_donors_2035.sbatch
 ```
 
-Other suffixes are `1968_69`, `1988_89`, `1998_99`. Omitting `WEATHER_YEARS`
+Other suffixes are `1968_69`, `1988_89`, `2019_20`. Omitting `WEATHER_YEARS`
 builds all four in that order. Preview a build before submitting, with the
 Sophia environment active:
 
@@ -209,7 +209,7 @@ sbatch run_dispatch_2035_wo_V2G.sbatch --years 1988-1989
 ```
 
 Repeat these two commands, replacing the year with `1965-1966`, `1968-1969`,
-then `1998-1999`, reviewing each year before proceeding. Each invocation runs
+then `2019-2020`, reviewing each year before proceeding. Each invocation runs
 only that year, with the same eight cases. All selected inputs are checked
 before the first case; missing donors cannot trigger weather/investment builds.
 To first test a historical year's no-outage control, append `--cases base_weather`.

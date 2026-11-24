@@ -16,7 +16,7 @@ CONFIGFILES = ["config/config.sector_2025.yaml", "config/config.sophia.yaml",
                "config/config.interconnector_disruption.yaml"]
 RULES = ["dispatch_disruptions", "prepare_disruption_network", "apply_interconnector_disruption",
          "solve_disruption_dispatch", "plot_outage_dispatch", "plot_outage_missing_demand"]
-NEW_YEARS = ["1965-1966", "1968-1969", "1988-1989", "1998-1999"]
+NEW_YEARS = ["1965-1966", "1968-1969", "1988-1989", "2019-2020"]
 
 
 def merge_config(target, overlay):

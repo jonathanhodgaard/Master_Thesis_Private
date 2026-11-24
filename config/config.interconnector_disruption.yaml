@@ -22,8 +22,8 @@ disruption:
       weather_network: resources/weather_1968_69/sector_2025/networks/base_s_10___2025.nc
     "1988-1989":
       weather_network: resources/weather_1988_89/sector_2025/networks/base_s_10___2025.nc
-    "1998-1999":
-      weather_network: resources/weather_1998_99/sector_2025/networks/base_s_10___2025.nc
+    "2019-2020":
+      weather_network: resources/weather_2019_20/sector_2025/networks/base_s_10___2025.nc
   iis_time_limit: 300
 
   rolling_horizon:

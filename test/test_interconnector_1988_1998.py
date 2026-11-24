@@ -9,7 +9,7 @@ import yaml
 from scripts.run_disruption_campaign import NEW_YEARS, campaign_tasks, load_config, check_inputs
 
 ROOT = Path(__file__).resolve().parents[1]
-YEARS = ["1988-1989", "1998-1999"]
+YEARS = ["1988-1989", "2019-2020"]
 
 
 @pytest.mark.parametrize("scenario", ["sector_2025", "sector_2035_w_V2G", "sector_2035_wo_V2G"])
@@ -42,7 +42,7 @@ def test_new_arrays_select_correct_donors_and_preserve_case_settings(scenario):
     horizon = 2025 if scenario == "sector_2025" else 2035
     for index, task in enumerate(tasks):
         year = YEARS[index // 8]
-        label = "1988_89" if year == YEARS[0] else "1998_99"
+        label = "1988_89" if year == YEARS[0] else "2019_20"
         settings = task["settings"]
         donor = settings["cases"][task["case"]]["weather_network"]
         assert task["year"] == year
@@ -72,14 +72,14 @@ def test_missing_second_donor_is_reported_before_submission(tmp_path):
         config["disruption"]["weather_years"][year]["weather_network"] = str(path)
     (tmp_path / "1988-1989.nc").touch()
     tasks = campaign_tasks(config, YEARS)
-    with pytest.raises(FileNotFoundError, match="1998-1999.nc"):
+    with pytest.raises(FileNotFoundError, match="2019-2020.nc"):
         check_inputs(tasks)
-    (tmp_path / "1998-1999.nc").touch()
+    (tmp_path / "2019-2020.nc").touch()
     check_inputs(tasks)
 
 
 def test_weather_overlays_cover_both_new_donor_calendars():
-    for year, label in zip(YEARS, ["1988_89", "1998_99"]):
+    for year, label in zip(YEARS, ["1988_89", "2019_20"]):
         overlay = yaml.safe_load((ROOT / f"config/config.weather_{label}.yaml").read_text())
         start, end = year.split("-")
         assert overlay["snapshots"] == {
