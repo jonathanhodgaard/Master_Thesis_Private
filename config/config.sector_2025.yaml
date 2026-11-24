@@ -58,8 +58,19 @@ atlite:
 foresight: overnight   
 
 sector:
+  directional_ac_limits:
+    - name: oeresund
+      from_bus: "DK0 0AC" # Zealand / bidding zone DK2
+      to_bus: "SE0 0AC"
+      forward_mw: 1700 # AC exchange, with losses accounted separately in bus balances.
+      reverse_mw: 1300
   # See doc/capacity-overrides.md for node/bus selection, storage and Link units.
   capacity_overrides:
+    - name: freeze_new_zealand_gas_pipeline
+      years: [2025]
+      component: Link
+      names: ["gas pipeline new DK0 0AC <-> DK2 0AC"]
+      extendable: false # Candidate starts at zero; retain the existing fixed pipeline.
     - name: DE_rooftop
       years: [2025]
       component: Generator
@@ -199,6 +210,7 @@ clustering:
 solving:
   options:
     assign_all_duals: true 
+    transmission_losses: 2
   model_kwargs:
     solver_dir: "/scratch"
   solver:
@@ -207,6 +219,8 @@ solving:
   solver_options:
     gurobi-default:
       threads: 8
+      BarHomogeneous: 1
+      NumericFocus: 1
   mem_mb: 60000
   runtime: 12h
 

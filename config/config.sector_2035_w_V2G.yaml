@@ -49,6 +49,18 @@ foresight: overnight
 
 
 sector:
+  directional_ac_limits:
+    - name: oeresund
+      from_bus: "DK0 0AC" # Zealand / bidding zone DK2
+      to_bus: "SE0 0AC"
+      forward_mw: 1700 # AC exchange, with losses accounted separately in bus balances.
+      reverse_mw: 1300
+  capacity_overrides:
+    - name: freeze_new_zealand_gas_pipeline
+      years: [2035]
+      component: Link
+      names: ["gas pipeline new DK0 0AC <-> DK2 0AC"]
+      extendable: false
   district_heating:
     potential:
       DK:    0.752 #This number results in disctrict heating share of 70% (urban) central heating in Denmark. https://danskfjernvarme.dk/om-os/fakta-om-fjernvarme
@@ -160,6 +172,7 @@ clustering:
 solving:
   options:
     assign_all_duals: true
+    transmission_losses: 2
   solver:
     name: gurobi
     options: gurobi-default

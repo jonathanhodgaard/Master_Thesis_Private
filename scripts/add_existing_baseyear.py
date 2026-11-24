@@ -27,6 +27,7 @@ from scripts._helpers import (
 from scripts.add_electricity import sanitize_carriers
 from scripts.build_energy_totals import cartesian
 from scripts.definitions.heat_system import HeatSystem
+from scripts.directional_ac_limits import prepare_directional_ac_limits
 from scripts.prepare_sector_network import cluster_heat_buses, define_spatial
 
 logger = logging.getLogger(__name__)
@@ -872,6 +873,7 @@ if __name__ == "__main__":
         cluster_heat_buses(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
+    prepare_directional_ac_limits(n, options.get("directional_ac_limits", []))
 
     sanitize_custom_columns(n)
     sanitize_carriers(n, snakemake.config)

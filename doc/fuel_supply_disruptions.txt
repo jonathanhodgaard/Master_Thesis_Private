@@ -1,0 +1,11 @@
+Legacy upstream fuel-supply experiment
+=====================================
+
+The default runner was corrected to use consuming-Link restrictions, following
+the requested Nicoline-style approach. See doc/fuel_use_disruptions.txt and
+config/config.fuel_use_disruption_2025.yaml for the active campaign.
+
+The older config.fuel_supply_disruption_2025.yaml and winter overlay describe
+the separate upstream Generator experiment. They are retained for explicit
+use only; neither default fuel runner loads them. Do not merge the supply and
+fuel-use campaign configurations. Same-fuel supply/use restrictions are rejected.

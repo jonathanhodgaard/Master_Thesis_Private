@@ -11,12 +11,15 @@ from scripts._helpers import configure_logging
 from scripts.prepare_network_disruptions import assert_fixed_capacities
 from scripts.household_heat_constraints import META_KEY, save_household_heat_shares
 from scripts import solve_network as eur_solver
+from scripts.fuel_demand_shedding import fuel_shedding_reports
+from scripts.fuel_generator_disruption import fuel_generator_disruption_report
+from scripts.fuel_link_disruption import fuel_link_disruption_report
 
 logger = logging.getLogger(__name__)
 
 
 def save_fuel_backup_dispatch(n, csv_path):
-    """Report backup use per link, labelled by fuel, country and end use."""
+    """Report legacy parallel backups; resized originals produce a header-only CSV."""
     rows = []
     weights = n.snapshot_weightings.generators
     for name, info in n.meta.get("fuel_backup_links", {}).items():
@@ -150,6 +153,22 @@ if __name__ == "__main__":
             "group,share,heat_bus,technology\n", encoding="utf-8",
         )
     save_fuel_backup_dispatch(n, snakemake.output.fuel_backup_dispatch)
+    if snakemake.output.get("fuel_generator_disruptions"):
+        fuel_generator_disruption_report(n).to_csv(snakemake.output.fuel_generator_disruptions, index=False)
+    if snakemake.output.get("fuel_link_disruptions"):
+        fuel_link_disruption_report(n).to_csv(snakemake.output.fuel_link_disruptions, index=False)
+    fuel_reports = fuel_shedding_reports(n)
+    for name, frame in fuel_reports.items():
+        if snakemake.output.get(name):
+            frame.to_csv(snakemake.output[name], index=False)
+    detail = fuel_reports["fuel_shedding_by_demand"]
+    fuel_totals = {"fuel_unserved_MWh": float(detail.unserved_MWh.sum()),
+                   "fuel_shedding_cost_EUR": float(detail.penalty_cost_EUR.sum())}
+    if "dispatch_summary" in reports:
+        for key, value in fuel_totals.items():
+            reports["dispatch_summary"][key] = value
+    if "rolling_dispatch" in n.meta:
+        n.meta["rolling_dispatch"]["summary"].update(fuel_totals)
     for name in ("resource_usage", "storage_msv", "storage_msv_timeseries", "window_summary", "dispatch_summary"):
         if snakemake.output.get(name):
             if name not in reports:
@@ -159,6 +178,6 @@ if __name__ == "__main__":
                     columns = ["snapshot"]
                 reports[name] = pd.DataFrame(columns=columns)
                 if name == "dispatch_summary":
-                    reports[name] = pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective}])
+                    reports[name] = pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective, **fuel_totals}])
             reports[name].to_csv(snakemake.output[name], index=False)
     n.export_to_netcdf(snakemake.output.network)

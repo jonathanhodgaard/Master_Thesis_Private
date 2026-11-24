@@ -120,7 +120,8 @@ SUB_UNIT = {"consumer_cost": "M€", "consumer_cost_uncapped": "M€"}
 
 # ---- per-case metrics --------------------------------------------------------------
 def shedding_cost(n):
-    gens = n.generators.index[n.generators.carrier.isin(SHEDDING_CARRIERS)]
+    gens = n.generators.index[n.generators.carrier.isin(SHEDDING_CARRIERS)
+                              | n.generators.carrier.str.startswith("load-shedding-fuel-", na=False)]
     if gens.empty:
         return 0.0
     cost = n.get_switchable_as_dense("Generator", "marginal_cost")[gens]

@@ -1,0 +1,71 @@
+Fuel demand shedding with original delivery capacities
+=====================================================
+
+The campaign preserves optimized base-network biomass import delivery Links
+(import_capacity_MW: null) and disables the former doubling of fuel-accounting
+Links (fuel_backup.enable: false). Existing restoration logic removes legacy
+parallel backup Links and reverses recorded delivery-capacity increases.
+Prepared and solved outputs must be regenerated before comparing results.
+The 2035 interconnector overlays inherit these settings from the main overlay.
+
+Enable fuel-demand shedding under disruption.load_shedding.fuel. A separate
+Generator is attached to each positive actual fuel Load, not indiscriminately
+to primary fuel supply buses. Its hourly maximum equals that Load's positive
+consumption profile after donor-weather transfer. Repeating preparation
+refreshes these limits and does not duplicate assets. Setting enable: false
+removes these Generators. No fuel-consuming CHP or boiler is given a separate
+fuel slack: unmet electricity/heat is handled at its final-demand buses.
+
+Built-in demand classifications cover biomass, biogas, gas, oil (including
+naphtha, aviation kerosene, shipping, road transport and agriculture), coal,
+lignite, methanol, hydrogen and ammonia. Only actual positive Loads generate
+slack assets; empty fuel-supply buses, storage inventories, process emissions
+and electricity/heat loads do not acquire extra fuel supply. Electricity and
+heat shedding continue to use their existing preparation rules.
+
+Prices are EUR/MWh of unmet final fuel demand. Default: 23300. This is an
+uncalibrated modelling assumption, not an empirically established fuel VoLL.
+The precedence is costs_by_load > costs_by_carrier (the demand BUS carrier)
+> costs_by_fuel > default_cost, followed by a regional_cost_adders adjustment
+using the exact bus location. Prices must be positive and finite; regional
+adders may be negative if the final price stays positive. Unknown setting keys
+and nonexistent individual Load names fail validation.
+
+Example configuration:
+
+disruption:
+  load_shedding:
+    fuel:
+      enable: true
+      default_cost: 23300
+      costs_by_fuel: {biomass: 30000, gas: 25000, oil: 23300}
+      costs_by_carrier: {solid biomass for industry: 32000}
+      costs_by_load: {DK0 0AC solid biomass for industry: 35000}
+      regional_cost_adders: {DK0 0AC: 100}
+      demand_carriers: {}  # Additional exact bus-carrier -> fuel mappings.
+
+Each solved case writes:
+- fuel_shedding_by_demand.csv: demand, unserved and served MWh, fraction
+  unserved, peak MW, shedding hours, penalty cost, and demand/fuel/region labels.
+- fuel_shedding_by_fuel.csv: whole-network totals by fuel. Peak and hours use
+  the simultaneous aggregate profile, rather than summing asset peaks/hours.
+- fuel_shedding_timeseries.csv: hourly unmet MW per shedding Generator; the
+  by-demand table maps Generator names to Loads and regions.
+
+dispatch_summary.csv also contains fuel_unserved_MWh and fuel_shedding_cost_EUR.
+Energy and hours use generator snapshot weights; penalty costs use objective
+weights. Reports use only saved implemented snapshots after rolling dispatch,
+so overlap/lookahead solutions are not double counted. Fuel shedding costs
+are also excluded from the heatmap's dispatch-cost-excluding-shedding metric.
+
+Interpretation: shedding is unmet prescribed fuel demand, not an actual fuel
+purchase. No fuel consumption emissions are added for shed demand. It can
+reflect an upstream resource shortage OR a binding original delivery Link.
+Comparisons should subtract the matched no-outage baseline and inspect fuel
+budgets and delivery flows before attributing the cause. Shared fuel buses
+(e.g. industrial hydrogen) permit rationing between local demand and other
+uses; slack remains capped at the actual prescribed demand.
+
+Existing annual resource budgets, reference scarcity prices, physical storage
+and opening-inventory assumptions are retained. These changes do not launch
+production solves or overwrite saved base networks/results.

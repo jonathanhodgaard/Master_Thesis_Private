@@ -388,6 +388,16 @@
     "BiomassConfig": {
       "description": "Configuration for `biomass` settings.",
       "properties": {
+        "enforce_minimum_use": {
+          "default": true,
+          "description": "Require retained historical biomass, biogas and bioliquid supply. False keeps only annual upper limits; waste and HVC are unaffected.",
+          "type": "boolean"
+        },
+        "export_budget_duals": {
+          "default": false,
+          "description": "Export annual fuel-budget duals after an overnight sector solve to network metadata and CSV.",
+          "type": "boolean"
+        },
         "year": {
           "default": 2030,
           "description": "Year for which to retrieve biomass potential according to the assumptions of the `JRC ENSPRESO <https://data.jrc.ec.europa.eu/dataset/74ed5a04-7d74-4807-9eab-b94774309d9f>`_.",
@@ -4149,6 +4159,14 @@
       "properties": {
         "capacity_overrides": {
           "description": "Capacity floors and expansion settings applied during sector network preparation.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "directional_ac_limits": {
+          "description": "Directional AC exchange limits in MW, resolved during sector preparation and retained in dispatch metadata. Physical losses remain active.",
           "items": {
             "additionalProperties": true,
             "type": "object"
@@ -10501,6 +10519,16 @@
     "biomass": {
       "description": "Configuration for `biomass` settings.",
       "properties": {
+        "enforce_minimum_use": {
+          "default": true,
+          "description": "Require retained historical biomass, biogas and bioliquid supply. False keeps only annual upper limits; waste and HVC are unaffected.",
+          "type": "boolean"
+        },
+        "export_budget_duals": {
+          "default": false,
+          "description": "Export annual fuel-budget duals after an overnight sector solve to network metadata and CSV.",
+          "type": "boolean"
+        },
         "year": {
           "default": 2030,
           "description": "Year for which to retrieve biomass potential according to the assumptions of the `JRC ENSPRESO <https://data.jrc.ec.europa.eu/dataset/74ed5a04-7d74-4807-9eab-b94774309d9f>`_.",
@@ -10649,6 +10677,14 @@
       "properties": {
         "capacity_overrides": {
           "description": "Capacity floors and expansion settings applied during sector network preparation.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "directional_ac_limits": {
+          "description": "Directional AC exchange limits in MW, resolved during sector preparation and retained in dispatch metadata. Physical losses remain active.",
           "items": {
             "additionalProperties": true,
             "type": "object"

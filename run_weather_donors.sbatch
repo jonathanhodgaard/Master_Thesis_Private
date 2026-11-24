@@ -20,7 +20,7 @@ task_tmp_dir=$(mktemp -d "/scratch/${USER}-weather-donors-${SLURM_JOB_ID}-XXXXXX
 export TMPDIR="$task_tmp_dir" TMP="$task_tmp_dir" TEMP="$task_tmp_dir"
 
 # Require existing archived cutouts (regular files or working symbolic links).
-for cutout in europe-1961-1966-era5 europe-1966-1971-era5 europe-1981-1986-era5; do
+for cutout in europe-1961-1966-era5 europe-1966-1971-era5 europe-1986-1991-era5 europe-2016-2021-era5; do
   path="data/cutout/archive/v1.0/${cutout}.nc"
   if [[ ! -f "$path" || ! -r "$path" ]]; then
     echo "Missing or unreadable archived cutout: $path" >&2
@@ -31,7 +31,7 @@ done
 # Sequential invocations avoid concurrent writes to shared preprocessing files.
 # Explicit resources/ targets stop before solve_sector_network; no new capacity
 # optimisation is needed to supply weather profiles to fixed-capacity dispatch.
-for year in 1964_65 1965_66 1968_69 1982_83; do
+for year in 1965_66 1968_69 1988_89 2019_20; do
   target="resources/weather_${year}/sector_2025/networks/base_s_10___2025.nc"
   echo "Preparing donor: $year -> $target"
   snakemake "$target" \

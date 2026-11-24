@@ -28,7 +28,8 @@ class RollingDiagnostics:
                  "disruption_resource_budgets.py", "disruption_storage_msv.py",
                  "disruption_waste_hvc.py", "prepare_network_disruptions.py",
                  "interconnector_disruption.py", "household_heat_constraints.py",
-                 "solve_network.py", "disruption_diagnostics.py"]
+                 "solve_network.py", "disruption_diagnostics.py", "fuel_demand_shedding.py",
+                 "fuel_generator_disruption.py", "fuel_link_disruption.py"]
         self.write_json("provenance.json", {
             "slurm": {key: os.environ.get(key) for key in
                       ("SLURM_JOB_ID", "SLURM_ARRAY_JOB_ID", "SLURM_ARRAY_TASK_ID", "SLURM_JOB_NAME")},

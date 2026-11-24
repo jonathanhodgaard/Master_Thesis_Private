@@ -9,14 +9,14 @@ disruption:
   weather_years:
     "2013-2014":
       weather_network: null
-    "1964-1965":
-      weather_network: resources/weather_1964_65/sector_2035_w_V2G/networks/base_s_10___2035.nc
     "1965-1966":
       weather_network: resources/weather_1965_66/sector_2035_w_V2G/networks/base_s_10___2035.nc
     "1968-1969":
       weather_network: resources/weather_1968_69/sector_2035_w_V2G/networks/base_s_10___2035.nc
-    "1982-1983":
-      weather_network: resources/weather_1982_83/sector_2035_w_V2G/networks/base_s_10___2035.nc
+    "1988-1989":
+      weather_network: resources/weather_1988_89/sector_2035_w_V2G/networks/base_s_10___2035.nc
+    "2019-2020":
+      weather_network: resources/weather_2019_20/sector_2035_w_V2G/networks/base_s_10___2035.nc
   plotting:
     heatmap:
       # 2035 normal prices reach ~800 EUR/MWh (CO2 price), scarcity prices start at

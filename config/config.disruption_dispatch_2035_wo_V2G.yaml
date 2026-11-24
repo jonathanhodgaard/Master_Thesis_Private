@@ -42,23 +42,18 @@ disruption:
       initial_backlog_MWh: 0
       require_empty_at_period_end: true
   fuel_backup:
-    enable: true
-    capacity_multiplier: 1.0  # Backup capacity relative to the original fixed link.
-    marginal_cost_premium: 0.1  # EUR/MWh of fuel input, added to original link cost.
-    # Accounting delivery only: exclude pipelines, boilers, and carbon-capture equipment.
-    carriers:
-      - land transport oil
-      - gas for industry
-      - coal for industry
-      - solid biomass for industry
-      - industry methanol
-      - kerosene for aviation
-      - shipping oil
-      - shipping methanol
-      - agriculture machinery oil
+    enable: false # Original fuel delivery capacities.
   load_shedding:
     elec_cost: 10000
     heat_cost: 10000
+    fuel:
+      enable: true
+      default_cost: 23300 # EUR/MWh unmet fuel; uncalibrated modelling assumption.
+      costs_by_fuel: {}
+      costs_by_carrier: {}
+      costs_by_load: {}
+      regional_cost_adders: {}
+      demand_carriers: {}
   cases:
     weather_1965_66:
       weather_network: resources/weather_1965_66/sector_2035_wo_V2G/networks/base_s_10___2035.nc

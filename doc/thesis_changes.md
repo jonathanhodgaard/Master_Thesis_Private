@@ -114,7 +114,7 @@ Rolling runs additionally create per-window solver logs; failed Gurobi solves ma
 | `config/config.sector_2035_w_V2G.yaml`, `config/config.sector_2035_wo_V2G.yaml` | 2035 overnight comparisons with EV DSM enabled and V2G respectively enabled/disabled. Existing CSV overlays are restricted to 2025; separately configured 2035 capacity-fixing settings still apply. |
 | `config/config.weather_1965_66.yaml` | Prepare an alternative July 1965-June 1966 weather donor, separate resource prefix, historical ERA5 cutout, leap-day removal and fixed reference nuclear availability. |
 | `config/config.disruption_dispatch_2025.yaml` | Matching 2025 disruption overlay. Currently enables `base_weather`, uses a 120-hour window / 24-hour overlap and no simulation cutoff. The historical-weather case is commented out. |
-| `config/config.interconnector_disruption.yaml` | Main dispatch configuration: 168-hour look-ahead, 48-hour overlap (120-hour implementation), mixed hourly/annual storage values, 168-hour waste periods/buffer, FI/SE distribution multipliers of 1.15/1.02, refreshed heat vents, baseline and dated interconnector cases. Replaces the historical rolling/disruption overlay stack; sector and Sophia configurations remain separate. |
+| `config/config.interconnector_disruption.yaml` | Main dispatch configuration: 168-hour look-ahead, 48-hour overlap (120-hour implementation), monthly-average thermal-pit MSVs and unchanged aggregation for other storage, 168-hour waste periods/buffer, original FI/SE distribution capacities (multipliers 1.0), refreshed heat vents, baseline and dated interconnector cases. Replaces the historical rolling/disruption overlay stack; sector and Sophia configurations remain separate. |
 | `config/config.disruption_dispatch_2035_w_V2G.yaml`, `config/config.disruption_dispatch_2035_wo_V2G.yaml` | Matching 2035 disruption overlays; currently use 48-hour windows / 24-hour overlap and an exclusive `2013-07-15` cutoff for initial testing. |
 | `config/config.sophia.yaml` | SOPHIA solver-directory override. |
 | `config/config.scenario.default.yaml` | Draft scenario/network template with a placeholder network path; not a ready-to-run disruption overlay. |
@@ -168,7 +168,8 @@ equal-duration sensitivity cases. Gas connections remain available during electr
 and 100,000 EUR/MWh heat, applied across all countries. Finite resource allowances are enforced.
 
 Preparation freezes capacities and heat shares, transfers any donor inputs, scales both directions
-of the selected distribution links, prepares waste arrivals and fuel backup links, refreshes enabled
+of the selected distribution links, prepares waste arrivals and doubles original fuel-delivery
+accounting links (no parallel backups or cost premium), refreshes enabled
 heat vents, then adds shedding. Outages are applied afterward, so the adjusted grid/vent capacities
 are retained in both the baseline and disrupted networks. Heat-vent resizing only affects existing
 enabled vents and keeps their disposal penalties; it does not create vents in disabled heat areas.

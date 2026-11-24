@@ -625,6 +625,7 @@ existing_capacities:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#sector
 sector:
   capacity_overrides: []
+  directional_ac_limits: []
   transport: true
   heating: true
   biomass: true

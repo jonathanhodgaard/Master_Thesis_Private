@@ -140,5 +140,9 @@ def apply_interconnector_outages(n, events):
 if __name__ == "__main__":
     n = pypsa.Network(snakemake.input.net)
     apply_interconnector_outages(n, snakemake.params.events)
+    from scripts.fuel_generator_disruption import apply_fuel_generator_disruptions
+    apply_fuel_generator_disruptions(n, snakemake.params.get("fuel_events", []))
+    from scripts.fuel_link_disruption import apply_fuel_link_disruptions
+    apply_fuel_link_disruptions(n, snakemake.params.get("fuel_link_events", []))
     Path(snakemake.output.net).parent.mkdir(parents=True, exist_ok=True)
     n.export_to_netcdf(snakemake.output.net)

@@ -1,0 +1,18 @@
+# Load AFTER config.fuel_supply_disruption_2025.yaml.
+# 28 days: 7 before + 14 disruption + 7 recovery; all bounds end-exclusive.
+# Short screening test starts from reference predecessor states (2013-12-31 23:00),
+# common across cases/weather years. July-only inventory overrides cannot be used here.
+# Annual resource budgets deduct REFERENCE use before January; this is not a donor-year
+# July-January simulation. Use --full-year for continuous weather-specific prehistory.
+disruption:
+  output_directory: results/disruptions/sector_2025_fuel_supply_winter_test
+  rolling_horizon:
+    horizon: 168
+    overlap: 48
+    simulation:
+      start: 2014-01-01 00:00
+      end: 2014-01-29 00:00
+    storage:
+      initial_inventory: []
+  plotting:
+    enable: false

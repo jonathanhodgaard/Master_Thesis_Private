@@ -43,14 +43,14 @@ python -m scripts.run_disruption_campaign \
   --configfiles config/config.sector_2035_w_V2G.yaml config/config.sophia.yaml \
                 config/config.interconnector_disruption.yaml \
                 config/config.interconnector_disruption_2035_w_V2G.yaml \
-  --years 2013-2014,1964-1965,1965-1966,1968-1969,1982-1983 --check-inputs
+  --years 2013-2014,1965-1966,1968-1969,1988-1989,2019-2020 --check-inputs
 
 sbatch run_disruption_array_2035_w_V2G.sbatch
 ```
 
 Submit only after the input check succeeds. Replace `--check-inputs` with `--list`
 to print the exact task/year/case mapping. IDs 0–7 select 2013–2014, 8–15
-1964–1965, 16–23 1965–1966, 24–31 1968–1969, and 32–39 1982–1983. Within each
+1965–1966, 16–23 1968–1969, 24–31 1988–1989, and 32–39 2019–2020. Within each
 year the order is `base_weather`, `se_interconnector`, `de_interconnector`,
 `dk1_interconnector`, `se_de_interconnector`, `se_dk1_interconnector`,
 `de_dk1_interconnector`, `eastern_denmark_all`.
@@ -109,7 +109,9 @@ Load, in order: the matching 2035 sector config, Sophia config,
 The common config is the current 2025 campaign: all eight cases and outage dates,
 168-hour horizon, 48-hour overlap, full July-June simulation, resource allowances,
 opening inventories, hourly/carrier-specific storage prices, CO2 pricing,
-weekly waste treatment, heat vents, fuel backups, shedding costs and solver tolerances.
+weekly waste treatment, heat vents, doubled original fuel-delivery accounting links,
+shedding costs and solver tolerances. The legacy `fuel_backup` configuration name is retained;
+no parallel backup links or marginal-cost premium are added.
 The 2035 overlays change only the reference paths, planning horizon, output root
 and donor paths. Do not add the older `config.disruption_dispatch_2035_*.yaml`
 overlays: those contain different two-week/48-hour trial assumptions.
@@ -129,10 +131,12 @@ its `s_max_pu` and loss constraints. Opposite DC directions represent the same
 connection and must not be summed as physical capacity. DK0 is Eastern Denmark
 (DK2 bidding zone); the model's DK2 cluster is Western Denmark.
 
-Default Finland/Sweden distribution multipliers remain **1.15 / 1.02**, matching
-2025. To test whether they are needed in 2035, use `NATIVE_LOW_VOLTAGE=1` below;
-this sets both multipliers to 1.0 and selects a separate output root.
-Do not mix the two output trees when comparing runs.
+Default Finland/Sweden distribution multipliers are **1.0 / 1.0**, matching
+2025 and preserving the original capacities. Thermal pits use monthly-average
+reference MSVs; all other storage aggregation settings remain unchanged.
+The existing `NATIVE_LOW_VOLTAGE=1` option below retains the same capacities
+and selects a separate output root for compatibility with earlier diagnostics.
+Do not mix results from earlier expanded-grid runs with the current defaults.
 
 ## 1. First test: original weather, no donor build required
 
@@ -181,18 +185,18 @@ The archived cutouts must be readable under `data/cutout/archive/v1.0/`.
 To build only the next weather year for both variants:
 
 ```bash
-sbatch --export=ALL,WEATHER_YEARS=1964_65 run_weather_donors_2035.sbatch
+sbatch --export=ALL,WEATHER_YEARS=1965_66 run_weather_donors_2035.sbatch
 ```
 
-Other suffixes are `1965_66`, `1968_69`, `1982_83`. Omitting `WEATHER_YEARS`
+Other suffixes are `1968_69`, `1988_89`, `2019_20`. Omitting `WEATHER_YEARS`
 builds all four in that order. Preview a build before submitting, with the
 Sophia environment active:
 
 ```bash
 snakemake --dry-run --cores 1 \
-  resources/weather_1964_65/sector_2035_w_V2G/networks/base_s_10___2035.nc \
+  resources/weather_1988_89/sector_2035_w_V2G/networks/base_s_10___2035.nc \
   --configfiles config/config.sector_2035_w_V2G.yaml config/config.sophia.yaml \
-                config/config.weather_1964_65.yaml
+                config/config.weather_1988_89.yaml
 ```
 
 ## 3. Then test one historical weather year at a time
@@ -200,12 +204,12 @@ snakemake --dry-run --cores 1 \
 After its donor job succeeds and the original-weather tests have been reviewed:
 
 ```bash
-sbatch run_dispatch_2035_w_V2G.sbatch --years 1964-1965
-sbatch run_dispatch_2035_wo_V2G.sbatch --years 1964-1965
+sbatch run_dispatch_2035_w_V2G.sbatch --years 1988-1989
+sbatch run_dispatch_2035_wo_V2G.sbatch --years 1988-1989
 ```
 
 Repeat these two commands, replacing the year with `1965-1966`, `1968-1969`,
-then `1982-1983`, reviewing each year before proceeding. Each invocation runs
+then `2019-2020`, reviewing each year before proceeding. Each invocation runs
 only that year, with the same eight cases. All selected inputs are checked
 before the first case; missing donors cannot trigger weather/investment builds.
 To first test a historical year's no-outage control, append `--cases base_weather`.
@@ -217,7 +221,7 @@ python -m scripts.run_disruption_campaign \
   --configfiles config/config.sector_2035_w_V2G.yaml config/config.sophia.yaml \
                 config/config.interconnector_disruption.yaml \
                 config/config.interconnector_disruption_2035_w_V2G.yaml \
-  --years 1964-1965 --check-inputs
+  --years 1988-1989 --check-inputs
 ```
 
 Replace `--check-inputs` with `--list` to display case ordering, or with
@@ -261,7 +265,7 @@ validates reference calendars/weights, interconnector parity, every outage,
 fixed household shares, frozen capacities, waste handling, fuel-budget duals,
 CO2-price replacement, storage duals and opening inventories, then constructs
 the first production-sized 168-hour optimization model. Repeat with `wo_V2G`.
-`--year 1964-1965` validates the matching donor once built; `--native-low-voltage`
+`--year 1988-1989` validates the matching donor once built; `--native-low-voltage`
 checks native distribution capacities. `--solve-window` additionally attempts
 that opening week with HiGHS and a 180-second solver limit, without changing
 production Gurobi settings. Structural checks alone do not prove feasibility;
@@ -293,7 +297,9 @@ failed rolling window. Inspect the conflicting equations and full-precision
 captures before changing assumptions; an IIS identifies a conflict set, not a
 unique cause. `solver_window_NNNN.log` and the case `dispatch.log` are retained.
 Successful cases also have `window_summary.csv`, `resource_usage.csv`,
-`dispatch_summary.csv` and fuel-backup reports. Shedding is a feasible shortage
+`dispatch_summary.csv`. The retained `fuel_backup_dispatch.csv` has headers only
+because no parallel backups are created; original/resized capacities are recorded in
+network metadata under `fuel_delivery_capacity_adjustments`. Shedding is a feasible shortage
 outcome and should be assessed separately from mathematical infeasibility.
 
 Per-case plots are generated by each task. Shared comparison plots are separate,
