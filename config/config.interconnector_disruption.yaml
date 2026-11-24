@@ -150,6 +150,9 @@ disruption:
       reference_case: base_weather   # also the same-year control for vs_same_year
       window: ["2013-12-01", "2014-03-01"]  # same for every case (end exclusive): longest outage
       scarcity_price: 1000           # EUR/MWh; at or above = scarcity hour (normal prices < ~300)
+      # consumer_cost heatmap: price capped here (EU day-ahead harmonised maximum clearing
+      # price, SDAC; check the value in force). consumer_cost_uncapped uses the model price.
+      price_cap: 4000                # EUR/MWh
 
   # dispatch_disruptions runs every case listed here with shared settings above.
   # Each case can combine a prepared donor weather network and multiple outages.

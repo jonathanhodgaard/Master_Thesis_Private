@@ -136,7 +136,8 @@ if HEATMAP_YEARS:
     CAMPAIGN_DIR = DISRUPTION_DIR.rsplit("/", 1)[0]
     # keep in sync with METRICS in scripts/plot_disruption_heatmaps.py; every metric is
     # drawn against both baselines (the table also has absolute values)
-    HEATMAP_METRICS = ["ens_power", "price_normal", "shedding_hours",
+    HEATMAP_METRICS = ["ens_power", "voll_cost", "consumer_cost", "consumer_cost_uncapped",
+                       "price_normal", "shedding_hours",
                        "scarcity_hours_no_shedding", "consumer_cost_normal",
                        "consumer_cost_scarcity", "dispatch_cost"]
     HEATMAP_BASELINES = ["vs_same_year", "vs_reference"]

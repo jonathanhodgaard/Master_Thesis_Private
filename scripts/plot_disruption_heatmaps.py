@@ -22,9 +22,16 @@ metrics use one fixed window for every case (plotting.heatmap.window, default
   scarcity_hours_no_shedding    scarcity-priced hours WITHOUT shedding in the region:
                                 a neighbour's shortage priced in over the cables, or
                                 storage carrying a nearby shedding hour's value over
-  consumer_cost_*_MEUR          sum over hours of price x regional electricity demand:
-                                _normal (hours below scarcity_price), _scarcity (hours
-                                at or above) and _total
+  consumer_cost_MEUR            sum over hours of min(price, price_cap) x served regional
+                                electricity demand (demand - load shedding: consumers pay
+                                only for what they get). price_cap = plotting.heatmap.
+                                price_cap (default 4000 EUR/MWh, EU day-ahead maximum).
+  consumer_cost_uncapped_MEUR   same with the model price (scarcity hours near VoLL)
+  consumer_cost_{normal,scarcity}_MEUR  uncapped, split: hours below / at or above
+                                scarcity_price
+  voll_cost_MEUR                regional load shedding x its VoLL in the window
+                                (electricity and heat shedding generators on the
+                                region's buses, their marginal cost = VoLL), M€
   dispatch_cost_excl_shedding_MEUR  system-wide operating cost of the whole run
                                 (dispatch_summary.csv, operating_cost_EUR) minus the
                                 load-shedding cost. NaN without a summary file.
@@ -62,6 +69,8 @@ logger = logging.getLogger(__name__)
 SHEDDING_CARRIERS = ("load-shedding-electricity", "load-shedding-heat")
 DEFAULT_WINDOW = ("2013-12-01", "2014-03-01")   # end exclusive
 DEFAULT_SCARCITY_PRICE = 1000.0                 # EUR/MWh
+# EU day-ahead harmonised maximum clearing price (SDAC); check the value in force
+DEFAULT_PRICE_CAP = 4000.0                      # EUR/MWh
 # Gap check: hours priced within this factor of the cut-off (cut-off / 2 ... cut-off x 2)
 # make the normal/scarcity split depend on the exact cut-off -> warning in the log.
 GAP_FACTOR = 2.0
@@ -82,12 +91,22 @@ METRICS = {
                                    "hours with electricity price {label} ≥ {scarcity:,.0f} "
                                    "€/MWh\nbut no load shedding in {label}, {window} (h)",
                                    "{:+,.0f}", "abs"),
+    "consumer_cost": ("consumer_cost_MEUR",
+                      "consumer cost {label}, {window}, price capped at {cap:,.0f} €/MWh\n"
+                      "(price x served electricity demand)", "{:+,.0f} %", "pct"),
+    "consumer_cost_uncapped": ("consumer_cost_uncapped_MEUR",
+                               "consumer cost {label}, {window}, model price (scarcity "
+                               "hours near VoLL)\n(price x served electricity demand)",
+                               "{:+,.0f} %", "pct"),
     "consumer_cost_normal": ("consumer_cost_normal_MEUR",
                              "consumer cost {label}, {window},\n"
                              "hours below {scarcity:,.0f} €/MWh (M€)", "{:+,.1f}", "abs"),
     "consumer_cost_scarcity": ("consumer_cost_scarcity_MEUR",
                                "consumer cost {label}, {window},\n"
                                "hours ≥ {scarcity:,.0f} €/MWh (M€)", "{:+,.1f}", "abs"),
+    "voll_cost": ("voll_cost_MEUR",
+                  "cost of unserved energy {label}, {window}" + "\n" +
+                  "(load shedding x VoLL, electricity and heat, M€)", "{:+,.0f}", "abs"),
     "dispatch_cost": ("dispatch_cost_excl_shedding_MEUR",
                       "system dispatch cost excl. load shedding,\nwhole run (M€)",
                       "{:+,.0f}", "abs"),
@@ -95,6 +114,8 @@ METRICS = {
 NOT_SOLVED = "#d9d9d9"
 # number format of the second cell line (same-year base -> case); default "{:,.0f}"
 SUB_FORMAT = {"ens_power": "{:,.2f}"}
+# unit of the second cell line for % metrics (base -> case); default EUR/MWh
+SUB_UNIT = {"consumer_cost": "M€", "consumer_cost_uncapped": "M€"}
 
 
 # ---- per-case metrics --------------------------------------------------------------
@@ -105,6 +126,17 @@ def shedding_cost(n):
     cost = n.get_switchable_as_dense("Generator", "marginal_cost")[gens]
     # Unweighted, like operating_cost() in disruption_storage_msv.py (hourly snapshots).
     return float((n.generators_t.p[gens].fillna(0.0) * cost).to_numpy().sum())
+
+
+def regional_voll_cost(n, region, window):
+    # EUR: load shedding on the region's buses x its marginal cost (= VoLL), in the window
+    gens = n.generators.index[n.generators.carrier.isin(SHEDDING_CARRIERS)
+                              & n.generators.bus.map(n.buses.location).eq(region)]
+    if gens.empty:
+        return 0.0
+    cost = n.get_switchable_as_dense("Generator", "marginal_cost")[gens]
+    p = n.generators_t.p.reindex(columns=gens, fill_value=0.0).fillna(0.0)
+    return float(in_window((p * cost).sum(axis=1), window).sum())
 
 
 def price_bus(n, region):
@@ -134,7 +166,8 @@ def in_window(series, window):
 
 
 def case_metrics(network_path, summary_path, region, shed_noise_mw=0.1,
-                 window=DEFAULT_WINDOW, scarcity_price=DEFAULT_SCARCITY_PRICE):
+                 window=DEFAULT_WINDOW, scarcity_price=DEFAULT_SCARCITY_PRICE,
+                 price_cap=DEFAULT_PRICE_CAP):
     import pypsa
 
     n = pypsa.Network(network_path)
@@ -144,9 +177,12 @@ def case_metrics(network_path, summary_path, region, shed_noise_mw=0.1,
     shed_h = in_window(heat.shed_MW, window)
     price = in_window(n.buses_t.marginal_price[price_bus(n, region)], window)
     demand = in_window(power.demand_MW, window).reindex(price.index).fillna(0.0)
+    # consumers pay only for the electricity they get: demand minus load shedding
+    served = (demand - shed_p.reindex(price.index).fillna(0.0)).clip(lower=0.0)
     scarce = price >= scarcity_price
     normal = ~scarce
-    cost_h = price * demand  # EUR per hour
+    cost_h = price * served                       # EUR per hour, model price
+    cost_capped_h = price.clip(upper=price_cap) * served
 
     # Is the cut-off inside an empty price gap? Count hours close to it on either side.
     near = int(((price >= scarcity_price / GAP_FACTOR)
@@ -167,7 +203,7 @@ def case_metrics(network_path, summary_path, region, shed_noise_mw=0.1,
     return {
         "ens_power_GWh": float(shed_p.sum() / 1e3),
         "ens_heat_GWh": float(shed_h.sum() / 1e3),
-        "price_normal_EUR_per_MWh": float(cost_h[normal].sum() / demand[normal].sum()),
+        "price_normal_EUR_per_MWh": float(cost_h[normal].sum() / served[normal].sum()),
         "scarcity_hours": int(scarce.sum()),
         # scarcity price set elsewhere: a neighbour sheds (priced in over the cables) or
         # storage carries the value of a nearby shedding hour over
@@ -175,11 +211,14 @@ def case_metrics(network_path, summary_path, region, shed_noise_mw=0.1,
             (scarce & ~(shed_p.reindex(price.index).fillna(0.0) > 0)).sum()),
         "consumer_cost_normal_MEUR": float(cost_h[normal].sum() / 1e6),
         "consumer_cost_scarcity_MEUR": float(cost_h[scarce].sum() / 1e6),
-        "consumer_cost_total_MEUR": float(cost_h.sum() / 1e6),
+        "consumer_cost_MEUR": float(cost_capped_h.sum() / 1e6),
+        "consumer_cost_uncapped_MEUR": float(cost_h.sum() / 1e6),
+        "hours_above_price_cap": int((price > price_cap).sum()),
         "dispatch_cost_MEUR": cost / 1e6,
         "shedding_cost_MEUR": shed_cost / 1e6,
+        "voll_cost_MEUR": regional_voll_cost(n, region, window) / 1e6,
         "dispatch_cost_excl_shedding_MEUR": (cost - shed_cost) / 1e6,
-        "price_load_weighted_EUR_per_MWh": float(cost_h.sum() / demand.sum()),
+        "price_load_weighted_EUR_per_MWh": float(cost_h.sum() / served.sum()),
         "price_mean_EUR_per_MWh": float(price.mean()),
         "price_median_EUR_per_MWh": float(price.median()),
         "price_max_EUR_per_MWh": float(price.max()),
@@ -246,6 +285,8 @@ def heatmap(grid, cbar_label, fmt, mark=None, sub=None):
                 ax.text(j, i, "n/s", ha="center", va="center", fontsize=9, color="#5f5f5f")
                 continue
             text = fmt.format(0.0 if abs(v) < 1e-9 else v)
+            if text.startswith("-") and not any(ch in "123456789" for ch in text):
+                text = "+" + text[1:]  # tiny negative rounding noise shown as "-0"
             color = "white" if abs(v) > 0.6 * lim else "#1a1a1a"
             second = subs[i, j] if subs is not None and isinstance(subs[i, j], str) else None
             ax.text(j, i - 0.13 if second else i, text, ha="center", va="center",
@@ -281,11 +322,13 @@ def window_label(window):
 
 
 def plot_all(files, years, cases, labels, reference_year, reference_case, region_label,
-             outputs, window=DEFAULT_WINDOW, scarcity_price=DEFAULT_SCARCITY_PRICE):
+             outputs, window=DEFAULT_WINDOW, scarcity_price=DEFAULT_SCARCITY_PRICE,
+             price_cap=DEFAULT_PRICE_CAP):
     table = load_table(files)
     frames = deltas(table, years, cases, reference_year, reference_case)
     rows = [c for c in cases if c != reference_case]
-    fill = dict(label=region_label, window=window_label(window), scarcity=scarcity_price)
+    fill = dict(label=region_label, window=window_label(window), scarcity=scarcity_price,
+                cap=price_cap)
 
     near = frames["absolute"].get("hours_near_scarcity_cutoff")
     if near is not None and (near > 0).any():
@@ -321,7 +364,7 @@ def plot_all(files, years, cases, labels, reference_year, reference_case, region
                              and np.isfinite(v) else None for v in col])
             grid.index = [labels.get(c, c) for c in grid.index]
             what = "change" if change == "pct" else "Δ"
-            unit = ("\ncell: change (%), and base → case (€/MWh)" if change == "pct"
+            unit = (f"\ncell: change (%), and base → case ({SUB_UNIT.get(key, '€/MWh')})" if change == "pct"
                     else "\ncell: change, and base → case")
             fig = heatmap(grid, f"{what} {label.format(**fill)}\n{vs_text}{unit}", fmt,
                           mark=mark, sub=sub)
@@ -349,13 +392,14 @@ if __name__ == "__main__":
     hm = opts.get("heatmap") or {}
     window = tuple(hm.get("window") or DEFAULT_WINDOW)
     scarcity = float(hm.get("scarcity_price", DEFAULT_SCARCITY_PRICE))
+    cap = float(hm.get("price_cap", DEFAULT_PRICE_CAP))
     if snakemake.rule == "disruption_case_metrics":
         summary = snakemake.input.get("summary") or None  # optional input: [] if missing
         if isinstance(summary, (list, tuple)):
             summary = summary[0] if summary else None
         metrics = case_metrics(snakemake.input.network, summary,
                                opts.get("region", "DK0 0AC"), opts.get("shed_noise_mw", 0.1),
-                               window, scarcity)
+                               window, scarcity, cap)
         pd.Series(metrics, name="value").to_csv(snakemake.output[0], index_label="metric")
     else:
         p = snakemake.params
@@ -363,4 +407,4 @@ if __name__ == "__main__":
         outputs = {k: v for k, v in snakemake.output.items()}
         plot_all(files, list(p.weather_years), list(p.cases), opts.get("case_labels") or {},
                  p.reference_year, p.reference_case, opts.get("region_label", "DK2"), outputs,
-                 window, scarcity)
+                 window, scarcity, cap)
