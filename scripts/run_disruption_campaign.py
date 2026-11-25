@@ -66,7 +66,8 @@ def task_targets(task):
     directory = f"{settings['output_directory']}/{task['case']}"
     targets += [f"{directory}/{report}.csv" for report in
                 ("fuel_shedding_by_demand", "fuel_shedding_by_fuel", "fuel_shedding_timeseries",
-                 "fuel_generator_disruptions", "fuel_link_disruptions")]
+                 "fuel_generator_disruptions", "fuel_link_disruptions",
+                 "hydrogen_shedding_by_bus", "hydrogen_shedding_timeseries")]
     plotting = settings.get("plotting", {})
     if plotting.get("enable", True):
         label = plotting.get("region_label", "DK2")

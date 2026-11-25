@@ -5,6 +5,7 @@ from numbers import Real
 
 import numpy as np
 import pandas as pd
+from scripts.hydrogen_balance_shedding import add_hydrogen_balance_shedding
 
 
 META_KEY = "fuel_demand_shedding"
@@ -50,7 +51,7 @@ def add_fuel_demand_shedding(n, options=None):
     if not isinstance(options, Mapping):
         raise ValueError("load_shedding.fuel must be a mapping.")
     allowed = {"enable", "default_cost", "costs_by_fuel", "costs_by_carrier",
-               "costs_by_load", "regional_cost_adders", "demand_carriers"}
+               "costs_by_load", "regional_cost_adders", "demand_carriers", "hydrogen_balance"}
     if set(options) - allowed:
         raise ValueError(f"Unknown fuel shedding settings: {sorted(set(options) - allowed)}")
     if not isinstance(options.get("enable", False), bool):
@@ -59,11 +60,12 @@ def add_fuel_demand_shedding(n, options=None):
     if not options.get("enable", False):
         n.remove("Generator", old)
         n.meta = {**n.meta, META_KEY: {}}
+        add_hydrogen_balance_shedding(n, options)
         return
 
     default = number(options.get("default_cost", 23_300), "default_cost", positive=True)
     maps = {}
-    for key in allowed - {"enable", "default_cost"}:
+    for key in allowed - {"enable", "default_cost", "hydrogen_balance"}:
         value = options.get(key, {})
         if not isinstance(value, Mapping):
             raise ValueError(f"{key} must be a mapping.")
@@ -109,6 +111,7 @@ def add_fuel_demand_shedding(n, options=None):
                          "penalty_EUR_per_MWh": float(cost), "capacity_MW": peak}
 
     # Validation completes before refreshing our own assets; never resize Links.
+    add_hydrogen_balance_shedding(n, options)
     n.remove("Generator", old)
     for name, record in records.items():
         carrier = PREFIX + record["fuel"]

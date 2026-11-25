@@ -115,6 +115,12 @@ disruption:
     fuel:
       enable: true
       default_cost: 23300
+      hydrogen_balance:
+        enable: true
+        # null inherits the common fuel price (including hydrogen/carrier overrides).
+        # Also covers process H2 use at buses with no final hydrogen Load.
+        cost: null
+        costs_by_bus: {}
       costs_by_fuel: {}
       costs_by_carrier: {}
       costs_by_load: {}

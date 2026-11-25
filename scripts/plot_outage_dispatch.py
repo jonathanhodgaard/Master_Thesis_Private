@@ -138,9 +138,11 @@ def add_split_legend(ax, supply, use, fontsize=8.5):
 def weather_year_offset(network, snapshots):
     # Years between the weather year (folder name "<start>-<end>" above the case folder,
     # e.g. .../1965-1966/<case>/network_solved.nc) and the model years of the snapshots.
-    # 0 when the folder is not a weather year. Only used to label the x-axis.
+    # Campaign years are July-June. January-only test runs still belong to the
+    # preceding July's model weather year. Only used to label the x-axis.
     m = re.fullmatch(r"(\d{4})-\d{4}", Path(network).parent.parent.name)
-    return int(m.group(1)) - snapshots[0].year if m else 0
+    model_weather_start = snapshots[0].year - int(snapshots[0].month < 7)
+    return int(m.group(1)) - model_weather_start if m else 0
 
 
 def shift_years(bal, offset):

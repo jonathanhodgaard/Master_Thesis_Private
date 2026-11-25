@@ -16,6 +16,7 @@ from scripts.disruption_storage_msv import (
 )
 from scripts.prepare_network_disruptions import assert_fixed_capacities
 from scripts.disruption_diagnostics import RollingDiagnostics
+from scripts.hydrogen_balance_shedding import add_hydrogen_shedding_constraints
 
 RESOURCE_COLUMNS = ["window", "resource", "carrier", "allowance_MWh", "used_before_run_MWh",
                     "implemented_MWh", "used_in_run_MWh", "remaining_MWh", "exceedance_MWh",
@@ -113,6 +114,7 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
                     planning_horizons=str(planning_horizon), snapshots=window,
                 )
             add_resource_terms(n, window, budgets)
+            add_hydrogen_shedding_constraints(n, window)
             add_msv_charging_credit(n, window, values)
             add_co2_price(n, window, co2_price)
             kwargs = deepcopy(solve_kwargs)

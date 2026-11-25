@@ -14,6 +14,9 @@ from scripts import solve_network as eur_solver
 from scripts.fuel_demand_shedding import fuel_shedding_reports
 from scripts.fuel_generator_disruption import fuel_generator_disruption_report
 from scripts.fuel_link_disruption import fuel_link_disruption_report
+from scripts.hydrogen_balance_shedding import (
+    add_hydrogen_balance_shedding, add_hydrogen_shedding_constraints, hydrogen_shedding_reports,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +95,8 @@ def write_infeasibility_report(n, report_path, time_limit=300):
 if __name__ == "__main__":
     configure_logging(snakemake)
     n = pypsa.Network(snakemake.input.network)
+    # Refresh even when an older prepared network is reused with mtime-only rules.
+    add_hydrogen_balance_shedding(n, snakemake.config['disruption'].get('load_shedding', {}).get('fuel', {}))
     assert_fixed_capacities(n)
     if META_KEY in n.meta and n.meta[META_KEY].get("mode") != "dispatch":
         raise ValueError("Household shares must be fixed before dispatch.")
@@ -135,6 +140,7 @@ if __name__ == "__main__":
             n, snakemake.config, snakemake.params,
             model_kwargs, solve_kwargs, planning_horizons=horizon,
         )
+        add_hydrogen_shedding_constraints(n, n.snapshots)
         status, condition = n.optimize.solve_model(**solve_kwargs)
         if status != "ok" or condition != "optimal":
             report = Path(snakemake.output.network).with_name("infeasibility.txt")
@@ -157,13 +163,20 @@ if __name__ == "__main__":
         fuel_generator_disruption_report(n).to_csv(snakemake.output.fuel_generator_disruptions, index=False)
     if snakemake.output.get("fuel_link_disruptions"):
         fuel_link_disruption_report(n).to_csv(snakemake.output.fuel_link_disruptions, index=False)
+    hydrogen_reports = hydrogen_shedding_reports(n)
+    for name, frame in hydrogen_reports.items():
+        if snakemake.output.get(name):
+            frame.to_csv(snakemake.output[name], index=False)
+    hydrogen_detail = hydrogen_reports['hydrogen_shedding_by_bus']
     fuel_reports = fuel_shedding_reports(n)
     for name, frame in fuel_reports.items():
         if snakemake.output.get(name):
             frame.to_csv(snakemake.output[name], index=False)
     detail = fuel_reports["fuel_shedding_by_demand"]
     fuel_totals = {"fuel_unserved_MWh": float(detail.unserved_MWh.sum()),
-                   "fuel_shedding_cost_EUR": float(detail.penalty_cost_EUR.sum())}
+                   "fuel_shedding_cost_EUR": float(detail.penalty_cost_EUR.sum()),
+                   "hydrogen_supply_shortfall_MWh": float(hydrogen_detail.missing_hydrogen_MWh.sum()),
+                   "hydrogen_shedding_cost_EUR": float(hydrogen_detail.penalty_cost_EUR.sum())}
     if "dispatch_summary" in reports:
         for key, value in fuel_totals.items():
             reports["dispatch_summary"][key] = value

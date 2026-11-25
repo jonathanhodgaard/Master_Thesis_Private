@@ -1,0 +1,90 @@
+Hydrogen shedding for process requirements
+=========================================
+
+The fuel-use campaign now enables a separate H2 balance slack at hydrogen buses
+with consuming processes, including buses with no positive final hydrogen Load.
+This covers Sabatier, methanolisation, Fischer-Tropsch and other H2-using Links.
+Gas/oil deratings, existing synthesis minimum outputs, physical capacities and
+storage assumptions are preserved. No minimum-dispatch cleanup is applied.
+
+Configuration in config/config.fuel_use_disruption_2025.yaml:
+
+disruption:
+  load_shedding:
+    fuel:
+      enable: true
+      default_cost: 23300
+      hydrogen_balance:
+        enable: true
+        cost: null
+        costs_by_bus: {}
+
+With cost: null, price inheritance is costs_by_carrier.H2, then
+costs_by_fuel.hydrogen, then the common default_cost. Therefore the present
+hydrogen penalty is the same 23300 EUR/MWh as other fuel shedding. An explicit
+hydrogen_balance.cost or costs_by_bus overrides that inherited price. Common
+fuel regional_cost_adders are applied afterward. All final prices must be
+positive and finite. Setting hydrogen_balance.enable: false removes this
+additional slack; ordinary final-demand hydrogen shedding remains available.
+
+Scope and bounds
+----------------
+One fixed Generator per H2 bus supplies missing hydrogen at the configured
+penalty. Its capacity envelope is the connected process input capacity and
+efficiencies. A model constraint additionally limits its dispatch to actual
+hydrogen consumption by those processes at every snapshot. It cannot create
+hydrogen solely for stock filling or export when processes are not consuming.
+Pure H2 transport/storage transfer Links are excluded from the requirement.
+Secondary H2 inputs on multi-port Links are included. Continuous forward-only
+consumption is required; ambiguous reverse consumption raises an explicit error.
+
+This is a missing-H2-supply proxy: the synthesis process can continue operating
+using penalized, otherwise unavailable hydrogen. It is distinct from reducing
+industrial production. No upstream energy use/emissions are modelled for this
+artificial hydrogen, and it does not consume the gas resource allowance.
+
+Existing Load-bounded fuel shedding is retained, including final hydrogen
+Loads. It is not duplicated: the new slack is bounded by process consumption,
+and final-demand slack is bounded by final Load. The two quantities are
+reported separately. Combined slack cannot exceed those two requirements.
+
+Reports per case
+----------------
+- hydrogen_shedding_by_bus.csv: missing H2 MWh, peak MW, hours, actual process H2
+  use, price and penalty cost, with bus/region/country labels.
+- hydrogen_shedding_timeseries.csv: hourly missing H2 MW per balance Generator.
+- dispatch_summary.csv: hydrogen_supply_shortfall_MWh, hydrogen_shedding_cost_EUR.
+- Existing fuel_shedding files still measure prescribed final fuel demand only.
+
+Rolling reports include only implemented hours, not lookahead/overlap twice.
+Penalty costs are part of ordinary dispatch operating cost; do not add them to
+that cost a second time. Heatmap costs excluding shedding subtract this penalty.
+
+Rerunning
+---------
+Copy the cumulative update into the repository on Sophia. To retry task 17
+(1988-1989, gas_reduction_90) using the unchanged 28-task winter mapping:
+
+  sbatch --array=17 run_fuel_use_winter_test_2025.sbatch
+
+To rerun all control/disruption cases consistently:
+
+  sbatch run_fuel_use_winter_test_2025.sbatch
+
+The solve driver refreshes H2 balance shedding from the current configuration,
+even if an older prepared network is reused with mtime-only rerun triggers.
+New named report outputs ensure completed older cases are scheduled again.
+To explicitly recreate preparation as well, append:
+
+  --forcerun prepare_disruption_network apply_interconnector_disruption solve_disruption_dispatch
+
+Local verification
+------------------
+The captured failed full-precision window was replayed locally with all original
+minimum-output requirements and capacities preserved. Adding H2 slacks with
+actual-consumption bounds made the full LP feasible at tolerance 1e-7 MW. This
+was a feasibility-only check; the economic objective was zeroed for that check.
+Separate solved tests verify the real penalty, price inheritance, storage-use
+bounds, secondary inputs, final-demand separation and rolling accounting.
+No Sophia folders were accessed during this implementation; the replay uses
+the previously copied local captures.
