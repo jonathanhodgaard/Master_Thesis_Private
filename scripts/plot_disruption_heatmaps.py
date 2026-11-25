@@ -106,7 +106,7 @@ METRICS = {
                                "hours ≥ {scarcity:,.0f} €/MWh (M€)", "{:+,.1f}", "abs"),
     "voll_cost": ("voll_cost_MEUR",
                   "cost of unserved energy {label}, {window}" + "\n" +
-                  "(load shedding x VoLL, electricity and heat, M€)", "{:+,.0f}", "abs"),
+                  "(load shedding x VoLL, electricity and heat, M€)", "{:+,.0f} M€", "abs"),
     "dispatch_cost": ("dispatch_cost_excl_shedding_MEUR",
                       "system dispatch cost excl. load shedding,\nwhole run (M€)",
                       "{:+,.0f}", "abs"),
@@ -116,6 +116,8 @@ NOT_SOLVED = "#d9d9d9"
 SUB_FORMAT = {"ens_power": "{:,.2f}"}
 # unit of the second cell line for % metrics (base -> case); default EUR/MWh
 SUB_UNIT = {"consumer_cost": "M€", "consumer_cost_uncapped": "M€"}
+# unit written after the second cell line (base -> case), e.g. "0 → 1,409 M€"
+SUB_SUFFIX = {"voll_cost": " M€"}
 
 
 # ---- per-case metrics --------------------------------------------------------------
@@ -359,8 +361,9 @@ def plot_all(files, years, cases, labels, reference_year, reference_case, region
                 ref = absolute.at[(reference_year, reference_case), column]
                 base = pd.Series(ref, index=years)
             level_fmt = SUB_FORMAT.get(key, "{:,.0f}")
+            suffix = SUB_SUFFIX.get(key, "")
             sub = level.reindex(index=rows_b).apply(
-                lambda col: [f"{level_fmt.format(base[col.name])} → {level_fmt.format(v)}"
+                lambda col: [f"{level_fmt.format(base[col.name])} → {level_fmt.format(v)}{suffix}"
                              if base is not None and np.isfinite(base[col.name])
                              and np.isfinite(v) else None for v in col])
             grid.index = [labels.get(c, c) for c in grid.index]
