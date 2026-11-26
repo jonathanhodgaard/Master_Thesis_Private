@@ -15,7 +15,7 @@ from scripts.disruption_storage_msv import (
     initialize_storage, carry_storage, storage_boundary_losses, msv_cost, operating_cost,
 )
 from scripts.prepare_network_disruptions import assert_fixed_capacities
-from scripts.disruption_diagnostics import RollingDiagnostics
+from scripts.disruption_diagnostics import RollingDiagnostics, close_solver_log
 from scripts.hydrogen_balance_shedding import add_hydrogen_shedding_constraints
 
 RESOURCE_COLUMNS = ["window", "resource", "carrier", "allowance_MWh", "used_before_run_MWh",
@@ -59,7 +59,7 @@ def simulation_period(n, options):
 
 def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwargs,
                            planning_horizon, options, output_directory=None,
-                           failure_callback=None):
+                           failure_callback=None, diagnostics=None, export_msv=False):
     # Import lazily: the helper remains importable without the full solver stack.
     from scripts import solve_network as eur_solver
 
@@ -84,9 +84,7 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
     if imports.get("enable", False) and np.isfinite(imports.get("limit", np.inf)):
         raise ValueError("Finite aggregate green-import budgets need an explicit ledger adapter before rolling dispatch.")
     snapshots = simulation_period(n, options)
-    diagnostics = RollingDiagnostics(output_directory, config)
-    if diagnostics.directory is not None:
-        n.meta = {**n.meta, "rolling_diagnostics_directory": str(diagnostics.directory)}
+    diagnostics = diagnostics or RollingDiagnostics(output_directory, config)
     # Work on the prepared copy only; reference inputs and original base files are read-only.
     budgets = build_resource_budgets(n, reference, options.get("resources", {}), snapshots[0])
     co2_price = replace_co2_budget(n, reference, options.get("co2", {}).get("replace_budget_with_price", True))
@@ -121,9 +119,12 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
             if output_directory is not None:
                 directory = Path(output_directory)
                 directory.mkdir(parents=True, exist_ok=True)
-                kwargs["log_fn"] = str(directory / f"solver_window_{number:04d}.log")
+                kwargs["log_fn"] = str(directory / "solver.log")
             diagnostics.phase("solving")
-            status, condition = n.optimize.solve_model(**kwargs)
+            try:
+                status, condition = n.optimize.solve_model(**kwargs)
+            finally:
+                close_solver_log(n, solve_kwargs["solver_name"])
             if status != "ok" or condition != "optimal":
                 diagnostics.phase("solve_failed", solver_status=str(status), termination_condition=str(condition))
                 if failure_callback is not None:
@@ -167,13 +168,17 @@ def solve_rolling_dispatch(n, reference, config, params, model_kwargs, solve_kwa
               "start": str(snapshots[0]), "end": str(snapshots[-1]),
               "resource_allowances_enforced": options.get("resources", {}).get("enforce_allowances", False),
               "separate_terminal_value": False, "summary": totals}}
-    return {
+    reports = {
         "resource_usage": pd.DataFrame(resource_rows, columns=RESOURCE_COLUMNS),
-        "storage_msv": pd.DataFrame(n.meta["disruption_storage_msv"], columns=MSV_COLUMNS),
-        "storage_msv_timeseries": pd.concat(
-            [msv_profile(value, snapshots).add_prefix(component + "::")
-             for component, value in values.items()], axis=1,
-        ).rename_axis("snapshot").reset_index(),
         "window_summary": window_table,
         "dispatch_summary": pd.DataFrame([totals]),
     }
+    if export_msv:
+        reports.update({
+            "storage_msv": pd.DataFrame(n.meta["disruption_storage_msv"], columns=MSV_COLUMNS),
+            "storage_msv_timeseries": pd.concat(
+                [msv_profile(value, snapshots).add_prefix(component + "::")
+                 for component, value in values.items()], axis=1,
+            ).rename_axis("snapshot").reset_index(),
+        })
+    return reports

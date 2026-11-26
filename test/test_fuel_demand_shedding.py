@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from scripts.fuel_demand_shedding import add_fuel_demand_shedding, fuel_shedding_reports
-from scripts.prepare_network_disruptions import add_load_shedding, add_fuel_backup_links
+from scripts.prepare_network_disruptions import add_load_shedding, restore_original_capacities
 from scripts.disruption_resource_budgets import build_resource_budgets
 
 
@@ -29,10 +29,9 @@ def network():
 def test_original_delivery_capacity_and_real_shortfall_are_preserved(tmp_path):
     n = network()
     n.snapshot_weightings.loc[:, :] = np.array([[1], [2]])
-    # Reversing the former doubling must restore the precise original capacity.
-    add_fuel_backup_links(n, {'enable': True})
-    assert n.links.at['industrial delivery', 'p_nom'] == 6
-    add_fuel_backup_links(n, {'enable': False})
+    n.meta['fuel_delivery_capacity_adjustments'] = {'industrial delivery': {'original_capacities': {'p_nom': 3}}}
+    n.links.at['industrial delivery', 'p_nom'] = 6
+    restore_original_capacities(n)
     assert n.links.at['industrial delivery', 'p_nom'] == 3
     add_load_shedding(n, fuel={'enable': True, 'default_cost': 1000})
     name = 'industry biomass load shedding fuel'
@@ -142,14 +141,3 @@ def test_reports_count_only_saved_committed_snapshots():
     reports = fuel_shedding_reports(n)
     assert reports['fuel_shedding_by_fuel'].iloc[0].unserved_MWh == 1
     assert len(reports['fuel_shedding_timeseries']) == 1
-
-
-def test_campaigns_disable_old_capacity_increases_and_enable_shedding():
-    root = Path(__file__).resolve().parents[1]
-    for name in ['config.interconnector_disruption.yaml', 'config.disruption_dispatch_2035_w_V2G.yaml',
-                 'config.disruption_dispatch_2035_wo_V2G.yaml']:
-        path = root / 'config' / name
-        config = yaml.safe_load(path.read_text(encoding='utf-8'))['disruption']
-        assert config['fuel_backup']['enable'] is False
-        assert config['load_shedding']['fuel']['enable'] is True
-        assert config['rolling_horizon']['resources'].get('import_capacity_MW') is None

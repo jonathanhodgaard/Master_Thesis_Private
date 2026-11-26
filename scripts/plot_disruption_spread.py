@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Spread of load shedding across weather years, per interconnector disruption case.
 
@@ -397,7 +399,7 @@ def event_table_plot(t, top=15):
     w = t.sort_values("peak_MW", ascending=False).head(top)
     rows = [[r.weather_year, r.case_label, f"{r.start_weather_year:%d %b %Y, %H:%M}",
              f"{r.duration_h:.0f}", f"{r.peak_MW:,.0f}", f"{r.peak_pct:.1f} %",
-             f"≈ {round(r.households_at_peak, -3):,.0f}", f"{r.ens_MWh:,.0f}"]
+             f"â‰ˆ {round(r.households_at_peak, -3):,.0f}", f"{r.ens_MWh:,.0f}"]
             for r in w.itertuples()]
     head = ["Weather\nyear", "Case", "Start", "Duration\n(h)", "Peak\n(MW)",
             "Peak share of\nDK2 demand", "Household\nequivalent", "Energy not\nserved (MWh)"]
@@ -531,7 +533,7 @@ def mix_plot(mix, table, cases, labels, order, colors, min_inside=4.0):
     ax.set_ylim(0, 106)
     ax.set_yticks(range(0, 101, 20))
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.0f} %"))
-    ax.set_ylabel("share of electricity demand covered\n(1 Dec – 1 Mar)")
+    ax.set_ylabel("share of electricity demand covered\n(1 Dec â€“ 1 Mar)")
     for sp in ("top", "right"):
         ax.spines[sp].set_visible(False)
     handles = {lab: h for h, lab in zip(*ax.get_legend_handles_labels())}
@@ -680,7 +682,7 @@ def comp_plot(results, cases, labels, solved, min_share=1.0, min_inside=4.0):
     ax.set_ylim(min(low * 1.3, -2), 125)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.0f} %"))
     ax.set_ylabel("share of the lost net import covered by each change\n"
-                  "(vs same-year no-outage case, 1 Dec – 1 Mar)")
+                  "(vs same-year no-outage case, 1 Dec â€“ 1 Mar)")
     for sp in ("top", "right"):
         ax.spines[sp].set_visible(False)
     handles = {lab: h for h, lab in zip(*ax.get_legend_handles_labels())}

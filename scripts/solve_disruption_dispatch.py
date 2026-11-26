@@ -1,196 +1,147 @@
-"""Full or rolling disruption dispatch using the existing sector constraints."""
-from pathlib import Path
+"""Solve fixed-capacity dispatch, retaining compact reports and failure evidence."""
 from contextlib import redirect_stdout
+from pathlib import Path
 import logging
-import shutil
+import os
+import subprocess
 
-import pypsa
 import pandas as pd
+import pypsa
 
 from scripts._helpers import configure_logging
 from scripts.prepare_network_disruptions import assert_fixed_capacities
-from scripts.household_heat_constraints import META_KEY, save_household_heat_shares
-from scripts import solve_network as eur_solver
+from scripts.household_heat_constraints import META_KEY
 from scripts.fuel_demand_shedding import fuel_shedding_reports
-from scripts.fuel_generator_disruption import fuel_generator_disruption_report
-from scripts.fuel_link_disruption import fuel_link_disruption_report
 from scripts.hydrogen_balance_shedding import (
-    add_hydrogen_balance_shedding, add_hydrogen_shedding_constraints, hydrogen_shedding_reports,
+    add_hydrogen_shedding_constraints, hydrogen_shedding_reports,
 )
+from scripts.disruption_diagnostics import RollingDiagnostics, close_solver_log
+from scripts.disruption_scenarios import common_policy
 
 logger = logging.getLogger(__name__)
 
 
-def save_fuel_backup_dispatch(n, csv_path):
-    """Report legacy parallel backups; resized originals produce a header-only CSV."""
-    rows = []
-    weights = n.snapshot_weightings.generators
-    for name, info in n.meta.get("fuel_backup_links", {}).items():
-        flow = n.links_t.p0[name].clip(lower=0)
-        delivered = (-n.links_t.p1[name]).clip(lower=0)
-        rows.append({
-            "backup_link": name, **info,
-            "backup_capacity_MW": n.links.at[name, "p_nom"],
-            "peak_input_MW": flow.max(),
-            "input_MWh": flow.mul(weights).sum(),
-            "delivered_MWh": delivered.mul(weights).sum(),
-        })
-    columns = ["backup_link", "original_link", "fuel", "end_use", "country",
-               "backup_capacity_MW", "peak_input_MW", "input_MWh", "delivered_MWh"]
-    pd.DataFrame(rows, columns=columns).to_csv(csv_path, index=False)
-
-
-def write_infeasibility_report(n, report_path, time_limit=300):
-    """Save conflicting equations and the solver IIS without changing the model."""
+def write_infeasibility_report(n, report_path, time_limit=60, save_failed_model=False):
+    """One readable conflict report, including bounds; optional single model export."""
     report_path = Path(report_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    # Save the complete live problem before the time-limited IIS search. The
-    # human-readable .ilp can round tiny fixed bounds enough to create a new
-    # conflict; it is not a full-precision replacement for the failed model.
-    captures = []
-    for suffix, save in (
-        (".mps", lambda path: n.model.solver_model.write(str(path))),
-        (".model.nc", lambda path: n.model.to_netcdf(path)),
-    ):
-        path = report_path.with_suffix(suffix)
-        try:
-            save(path)
-            captures.append(str(path))
-        except Exception:
-            logger.exception("Could not save complete failed model to %s", path)
     try:
-        solver_model = n.model.solver_model
-        # Gurobi's IIS search can be expensive on a full-year sector model.
-        solver_model.setParam("TimeLimit", time_limit)
+        solver = n.model.solver_model
+        if save_failed_model:
+            solver.write(str(report_path.with_suffix(".mps.gz")))
+        solver.setParam("TimeLimit", time_limit)
         labels = n.model.compute_infeasibilities()
-        solver_model.write(str(report_path.with_suffix(".ilp")))
-        full_report = report_path.with_suffix(".constraints.txt")
-        with full_report.open("w", encoding="utf-8") as stream:
+        conflict = report_path.with_suffix(".ilp")
+        solver.write(str(conflict))
+        with report_path.open("w", encoding="utf-8") as stream:
+            stream.write(f"IIS time limit: {time_limit} s\nIIS minimal: {bool(solver.IISMinimal)}\n")
+            stream.write("An IIS is one conflicting subsystem, not a unique root cause.\n\nNamed model constraints:\n")
             with redirect_stdout(stream):
                 n.model.constraints.print_labels(labels)
-        with report_path.open("w", encoding="utf-8") as stream:
-            stream.write(
-                f"Conflicting constraint labels: {len(labels)}\n"
-                f"IIS search time limit: {time_limit} seconds\n"
-                f"IIS minimal: {bool(solver_model.IISMinimal)}\n"
-                "Complete model captures: " + ", ".join(captures) + "\n"
-                "The .ilp may round fixed bounds; use the complete captures for replay.\n"
-                "The first equations are in model order, not ranked by cause.\n"
-                f"All conflicting equations: {full_report.name}\n"
-                "First 100 conflicting equations (base-network date labels):\n"
-            )
-            with redirect_stdout(stream):
-                n.model.constraints.print_labels(labels[:100])
-        logger.error("Infeasibility diagnostics saved to %s and .ilp", report_path)
+            stream.write("\nSolver conflict, including variable bounds (text may round coefficients):\n")
+            stream.write(conflict.read_text(encoding="utf-8"))
+        conflict.unlink()
     except Exception as exc:
-        # Preserve the original solve failure even if diagnostics are unavailable.
-        report_path.write_text(
-            f"Could not compute infeasibility diagnostics: {exc}\n"
-            "Complete model captures: " + ", ".join(captures) + "\n",
-            encoding="utf-8",
-        )
-        logger.exception("Could not compute infeasibility diagnostics")
+        with report_path.open("a", encoding="utf-8") as stream:
+            stream.write(f"\nConflict search incomplete or unavailable: {exc}\n")
+        logger.exception("Could not complete infeasibility diagnostics")
 
 
-if __name__ == "__main__":
-    configure_logging(snakemake)
-    n = pypsa.Network(snakemake.input.network)
-    # Refresh even when an older prepared network is reused with mtime-only rules.
-    add_hydrogen_balance_shedding(n, snakemake.config['disruption'].get('load_shedding', {}).get('fuel', {}))
-    assert_fixed_capacities(n)
-    if META_KEY in n.meta and n.meta[META_KEY].get("mode") != "dispatch":
-        raise ValueError("Household shares must be fixed before dispatch.")
-    rolling = snakemake.params.solving["options"].get("rolling_horizon", False)
-    # Reuse constraints without rerunning investment/topology preparation.
-    eur_solver.snakemake = snakemake
-    horizon = str(snakemake.config["disruption"]["planning_horizon"])
-    model_kwargs, solve_kwargs = eur_solver.collect_kwargs(
-        snakemake.config, snakemake.params.solving, [int(horizon)],
-        log_fn=snakemake.log.solver, mode="single",
-    )
-    if solve_kwargs["solver_name"] == "gurobi":
-        # Otherwise presolve may report only the ambiguous INF_OR_UNBD status.
-        solve_kwargs["solver_options"] = dict(solve_kwargs["solver_options"])
-        solve_kwargs["solver_options"]["DualReductions"] = 0
-    reports = {}
-    if rolling:
-        from scripts.rolling_disruption_dispatch import solve_rolling_dispatch
+def revision():
+    try:
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        diff = subprocess.check_output(["git", "status", "--porcelain"], text=True)
+        return {"commit": head, "working_tree_modified": bool(diff)}
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None}
 
-        directory = Path(snakemake.output.network).parent
+
+def run(smk):
+    from scripts import solve_network as eur_solver
+    from scripts.rolling_disruption_dispatch import solve_rolling_dispatch
+
+    configure_logging(smk)
+    directory = Path(smk.output.network).parent
+    settings = smk.config["disruption"]
+    info = {"identity": dict(smk.params.identity), "inputs": dict(smk.input.items()),
+            "reference_policy": "Original solved infrastructure reference supplies opening states, MSVs and scarcity prices; weather donor supplies operating inputs only.",
+            "rolling_horizon": dict(smk.params.rolling), "load_shedding": settings["load_shedding"],
+            "biomass_import_capacity_MW": settings["biomass_import_capacity_MW"],
+            "common_policy": common_policy(settings, dict(smk.params.solving), smk.config),
+            "solving": dict(smk.params.solving), "code": revision(),
+            "slurm": {key: os.environ.get(key) for key in ("SLURM_JOB_ID", "SLURM_ARRAY_TASK_ID")}}
+    diagnostics = RollingDiagnostics(directory, info)
+    n = None
+    try:
+        n = pypsa.Network(smk.input.network)
+        reference = pypsa.Network(smk.input.reference)
+        if n.meta.get("disruption_preparation", {}).get("policy") != info["common_policy"]:
+            raise ValueError("Prepared network policy differs from requested settings; rerun the baseline campaign first.")
+        info["event"] = n.meta.get("disruption_event")
+        from scripts.disruption_diagnostics import write_json
+        write_json(directory / "run_info.json", info)
+        assert_fixed_capacities(n)
+        if META_KEY in n.meta and n.meta[META_KEY].get("mode") != "dispatch":
+            raise ValueError("Household shares must be fixed before dispatch.")
+        eur_solver.snakemake = smk
+        horizon = str(settings["planning_horizon"])
+        model_kwargs, solve_kwargs = eur_solver.collect_kwargs(
+            smk.config, smk.params.solving, [int(horizon)], log_fn=smk.log.solver, mode="single")
+        if solve_kwargs["solver_name"] == "gurobi":
+            solve_kwargs["solver_options"] = dict(solve_kwargs["solver_options"])
+            solve_kwargs["solver_options"]["DualReductions"] = 0
 
         def on_failure(network, number, status, condition):
             if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
-                failure_directory = Path(network.meta.get("rolling_diagnostics_directory", directory))
                 write_infeasibility_report(
-                    network, failure_directory / f"infeasibility_window_{number:04d}.txt",
-                    snakemake.config["disruption"].get("iis_time_limit", 300),
-                )
-                log = directory / f"solver_window_{number:04d}.log"
-                if log.is_file():
-                    shutil.copy2(log, failure_directory / log.name)
+                    network, diagnostics.failure_directory / "infeasibility.txt",
+                    settings.get("iis_time_limit", 60), settings.get("save_failed_model", False))
 
-        reports = solve_rolling_dispatch(
-            n, pypsa.Network(snakemake.input.reference), snakemake.config,
-            snakemake.params, model_kwargs, solve_kwargs, horizon,
-            snakemake.params.rolling, output_directory=directory,
-            failure_callback=on_failure,
-        )
-    else:
-        eur_solver.create_optimization_model(
-            n, snakemake.config, snakemake.params,
-            model_kwargs, solve_kwargs, planning_horizons=horizon,
-        )
-        add_hydrogen_shedding_constraints(n, n.snapshots)
-        status, condition = n.optimize.solve_model(**solve_kwargs)
-        if status != "ok" or condition != "optimal":
-            report = Path(snakemake.output.network).with_name("infeasibility.txt")
-            if condition == "infeasible" and solve_kwargs["solver_name"] == "gurobi":
-                write_infeasibility_report(
-                    n, report,
-                    snakemake.config["disruption"].get("iis_time_limit", 300),
-                )
-            raise RuntimeError(f"Dispatch did not solve optimally: {status}, {condition}")
-    assert_fixed_capacities(n)
-    Path(snakemake.output.network).parent.mkdir(parents=True, exist_ok=True)
-    if META_KEY in n.meta:
-        save_household_heat_shares(n, snakemake.output.household_heat_shares)
-    else:
-        Path(snakemake.output.household_heat_shares).write_text(
-            "group,share,heat_bus,technology\n", encoding="utf-8",
-        )
-    save_fuel_backup_dispatch(n, snakemake.output.fuel_backup_dispatch)
-    if snakemake.output.get("fuel_generator_disruptions"):
-        fuel_generator_disruption_report(n).to_csv(snakemake.output.fuel_generator_disruptions, index=False)
-    if snakemake.output.get("fuel_link_disruptions"):
-        fuel_link_disruption_report(n).to_csv(snakemake.output.fuel_link_disruptions, index=False)
-    hydrogen_reports = hydrogen_shedding_reports(n)
-    for name, frame in hydrogen_reports.items():
-        if snakemake.output.get(name):
-            frame.to_csv(snakemake.output[name], index=False)
-    hydrogen_detail = hydrogen_reports['hydrogen_shedding_by_bus']
-    fuel_reports = fuel_shedding_reports(n)
-    for name, frame in fuel_reports.items():
-        if snakemake.output.get(name):
-            frame.to_csv(snakemake.output[name], index=False)
-    detail = fuel_reports["fuel_shedding_by_demand"]
-    fuel_totals = {"fuel_unserved_MWh": float(detail.unserved_MWh.sum()),
-                   "fuel_shedding_cost_EUR": float(detail.penalty_cost_EUR.sum()),
-                   "hydrogen_supply_shortfall_MWh": float(hydrogen_detail.missing_hydrogen_MWh.sum()),
-                   "hydrogen_shedding_cost_EUR": float(hydrogen_detail.penalty_cost_EUR.sum())}
-    if "dispatch_summary" in reports:
-        for key, value in fuel_totals.items():
+        if smk.params.solving["options"].get("rolling_horizon", False):
+            reports = solve_rolling_dispatch(
+                n, reference, smk.config, smk.params, model_kwargs, solve_kwargs, horizon,
+                smk.params.rolling, output_directory=directory, failure_callback=on_failure,
+                diagnostics=diagnostics, export_msv=bool(smk.output.get("storage_msv")))
+        else:
+            diagnostics.phase("building_model")
+            eur_solver.create_optimization_model(n, smk.config, smk.params, model_kwargs, solve_kwargs,
+                                                planning_horizons=horizon)
+            add_hydrogen_shedding_constraints(n, n.snapshots)
+            diagnostics.phase("solving")
+            try:
+                status, condition = n.optimize.solve_model(**solve_kwargs)
+            finally:
+                close_solver_log(n, solve_kwargs["solver_name"])
+            if status != "ok" or condition != "optimal":
+                diagnostics.phase("solve_failed", solver_status=str(status), termination_condition=str(condition))
+                on_failure(n, 0, status, condition)
+                raise RuntimeError(f"Dispatch did not solve optimally: {status}, {condition}")
+            reports = {"resource_usage": pd.DataFrame(columns=["resource", "remaining_MWh"]),
+                       "window_summary": pd.DataFrame(columns=["window", "window_objective_EUR"]),
+                       "dispatch_summary": pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective}])}
+        diagnostics.phase("saving_results")
+        # Compute totals without exporting duplicate hourly fuel/H2 tables.
+        fuel = fuel_shedding_reports(n)["fuel_shedding_by_demand"]
+        hydrogen = hydrogen_shedding_reports(n)["hydrogen_shedding_by_bus"]
+        totals = {"fuel_unserved_MWh": float(fuel.unserved_MWh.sum()),
+                  "fuel_shedding_cost_EUR": float(fuel.penalty_cost_EUR.sum()),
+                  "hydrogen_supply_shortfall_MWh": float(hydrogen.missing_hydrogen_MWh.sum()),
+                  "hydrogen_shedding_cost_EUR": float(hydrogen.penalty_cost_EUR.sum())}
+        for key, value in totals.items():
             reports["dispatch_summary"][key] = value
-    if "rolling_dispatch" in n.meta:
-        n.meta["rolling_dispatch"]["summary"].update(fuel_totals)
-    for name in ("resource_usage", "storage_msv", "storage_msv_timeseries", "window_summary", "dispatch_summary"):
-        if snakemake.output.get(name):
-            if name not in reports:
-                from scripts.rolling_disruption_dispatch import RESOURCE_COLUMNS, MSV_COLUMNS
-                columns = RESOURCE_COLUMNS if name == "resource_usage" else MSV_COLUMNS if name == "storage_msv" else ["mode", "objective_EUR"]
-                if name == "storage_msv_timeseries":
-                    columns = ["snapshot"]
-                reports[name] = pd.DataFrame(columns=columns)
-                if name == "dispatch_summary":
-                    reports[name] = pd.DataFrame([{"mode": "full_horizon", "objective_EUR": n.objective, **fuel_totals}])
-            reports[name].to_csv(snakemake.output[name], index=False)
-    n.export_to_netcdf(snakemake.output.network)
+        if "rolling_dispatch" in n.meta:
+            n.meta["rolling_dispatch"]["summary"].update(totals)
+        for name, frame in reports.items():
+            if smk.output.get(name):
+                frame.to_csv(smk.output[name], index=False)
+        assert_fixed_capacities(n)
+        n.export_to_netcdf(smk.output.network)
+        diagnostics.phase("complete")
+    except Exception as exc:
+        if diagnostics.current.get("phase") != "failed":
+            diagnostics.failure(exc, n)
+        raise
+
+
+if __name__ == "__main__":
+    run(snakemake)

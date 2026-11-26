@@ -1,3 +1,7 @@
+> Disruption campaign update: use [the current campaign guide](disruption_campaign.md).
+> The disruption file lists and commands below describe historical experiments;
+> retired files/configurations remain in Git history. Existing results are unchanged.
+
 # Thesis changes relative to PyPSA-Eur v2026.08.0
 
 ## Baseline and scope

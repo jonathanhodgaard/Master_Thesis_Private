@@ -84,7 +84,14 @@ def plot_balance(ax, bal, colors, resample="D", min_mw=1.0, note_loc="upper righ
     for df in (pos, neg):
         if df.empty:
             continue
-        polys = ax.stackplot(df.index, df.T.values, colors=[color[g] for g in df], linewidth=0)
+        draw = df
+        if resample is None:
+            # Hourly values apply until the next hour, including one-hour events.
+            last = df.iloc[[-1]].copy()
+            last.index = pd.DatetimeIndex([df.index[-1] + pd.Timedelta(hours=1)])
+            draw = pd.concat([df, last])
+        kwargs = {"step": "post"} if resample is None else {}
+        polys = ax.stackplot(draw.index, draw.T.values, colors=[color[g] for g in draw], linewidth=0, **kwargs)
         for g, poly in zip(df, polys):
             if g == "Load shedding":
                 poly.set_hatch("////")
@@ -167,26 +174,15 @@ def plot_year(bal, label, kind, colors, resample="D"):
 
 
 def zoom_windows(index, windows):
-    # Keep the configured windows that lie inside the snapshots. If none do (e.g. another
-    # weather year), use two weeks from the second Monday of July and of January.
+    # All bounds use [start, end), including one-hour events.
     out = {}
     for name, (start, end) in windows.items():
-        if len(index[(index >= pd.Timestamp(start)) & (index < pd.Timestamp(end) + pd.Timedelta(days=1))]) > 24:
+        start, end = pd.Timestamp(start), pd.Timestamp(end)
+        if len(index[(index >= start) & (index < end)]):
             out[name] = (str(start), str(end))
-        else:
-            logger.warning(f"zoom window {name} ({start} – {end}) is outside the snapshots, skipped")
-    if out:
-        return out
-    for name, month in (("Summer", 7), ("Winter", 1)):
-        days = index[(index.month == month) & (index.day >= 8)].normalize().unique()
-        mondays = days[days.weekday == 0]
-        if len(mondays):
-            start = mondays[0]
-            out[name] = (f"{start:%Y-%m-%d}", f"{start + pd.Timedelta(days=13):%Y-%m-%d}")
-    if not out:   # short run: first two weeks
-        start = index[0].normalize()
-        out["First two weeks"] = (f"{start:%Y-%m-%d}", f"{start + pd.Timedelta(days=13):%Y-%m-%d}")
-    logger.info(f"zoom windows: {out}")
+    if not out:
+        end = min(index[-1] + pd.Timedelta(hours=1), index[0] + pd.Timedelta(days=7))
+        out["First week"] = (str(index[0]), str(end))
     return out
 
 
@@ -200,7 +196,7 @@ def worst_event_window(shed, index, days=14):
     start = max(start, index[0].normalize())
     start = min(start, (index[-1] - pd.Timedelta(days=days - 1)).normalize())
     end = start + pd.Timedelta(days=days - 1)
-    logger.info(f"worst shedding hour {peak} ({shed.max():.0f} MW): winter zoom {start:%Y-%m-%d} – {end:%Y-%m-%d}")
+    logger.info(f"worst shedding hour {peak} ({shed.max():.0f} MW): winter zoom {start:%Y-%m-%d} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ {end:%Y-%m-%d}")
     return f"{start:%Y-%m-%d}", f"{end:%Y-%m-%d}"
 
 
@@ -210,14 +206,14 @@ def plot_zoom(bal, label, kind, colors, windows):
                              constrained_layout=True, squeeze=False)
     supply, use = {}, {}
     for ax, (name, (start, end)) in zip(axes[0], windows.items()):
-        sub = bal.loc[start:end]
+        sub = bal.loc[(bal.index >= pd.Timestamp(start)) & (bal.index < pd.Timestamp(end))]
         s, u = plot_balance(ax, sub, colors, resample=None)
         supply.update(s)
         use.update(u)
-        ax.set_xlim(sub.index[0], sub.index[-1])
-        ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
-        ax.xaxis.set_minor_locator(mdates.DayLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+        ax.set_xlim(pd.Timestamp(start), pd.Timestamp(end))
+        locator = mdates.AutoDateLocator()
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     axes[0, 0].set_ylabel("GW (hourly)")
 
     # merge the panels' legends: a group drawn above 0 in any panel counts as supply
@@ -358,7 +354,13 @@ def main(network, outputs, options):
     region, label = options["region"], options["region_label"]
     n = pypsa.Network(network)
     colors = build_colors(n)
-    windows = zoom_windows(n.snapshots, options["zoom_windows"])
+    event = n.meta.get("disruption_event")
+    requested = options.get("zoom_windows", {})
+    if event:
+        requested = {"Selected event": [event["start"], event["end"]]}
+    if not requested:
+        requested = {"First week": [str(n.snapshots[0]), str(n.snapshots[min(168, len(n.snapshots)-1)])]}
+    windows = zoom_windows(n.snapshots, requested)
     offset = weather_year_offset(network, n.snapshots)
     logger.info(f"x-axis years shifted by {offset} (weather year labels)")
     bals = {kind: region_balance(n, region, kind, options["shed_noise_mw"]) for kind in KINDS}
@@ -366,7 +368,7 @@ def main(network, outputs, options):
     # power and heat); without shedding the configured winter window stays
     shed = bals["power"].get("Load shedding", pd.Series(0.0, index=n.snapshots))
     worst = worst_event_window(shed, n.snapshots)
-    if worst:
+    if worst and not event:
         windows = {k: v for k, v in windows.items() if k != "Winter"}
         windows["Winter"] = worst
     for kind in KINDS:

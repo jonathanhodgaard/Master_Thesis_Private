@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Electricity price duration curves for DK2 in the outage window.
 
@@ -57,7 +59,7 @@ def style(ax, n_hours, label, window):
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:,.0f}"))
     ax.set_xlim(0, n_hours)
     ax.set_xlabel(f"hours {window_label(window)}, sorted from highest to lowest price")
-    ax.set_ylabel(f"electricity price {label} (€/MWh)")
+    ax.set_ylabel(f"electricity price {label} (â‚¬/MWh)")
     ax.grid(color="#e0e0e0", lw=0.6)
     ax.set_axisbelow(True)
     for sp in ("top", "right"):
@@ -88,7 +90,7 @@ def plot_box(data, colors, label, window):
     ax.set_yscale("symlog", linthresh=LINTHRESH, linscale=0.4)
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:,.0f}"))
-    ax.set_ylabel(f"electricity price {label}, {window_label(window)} (€/MWh)")
+    ax.set_ylabel(f"electricity price {label}, {window_label(window)} (â‚¬/MWh)")
     ax.grid(axis="y", color="#e0e0e0", lw=0.6)
     ax.set_axisbelow(True)
     for sp in ("top", "right"):

@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Gas stored in DK2's gas store and gas used in DK2, over the year, one line per case.
 

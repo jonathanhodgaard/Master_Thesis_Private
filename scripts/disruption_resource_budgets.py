@@ -103,13 +103,6 @@ def build_resource_budgets(n, reference, options, start):
         used = float(reference.stores_t.p.reindex(index=previous, columns=[asset], fill_value=0).sum().sum())
         links = n.links.index[n.links.bus0.eq(row.bus)]
         power = float(n.links.loc[links, "p_nom"].sum())
-        # The reference built these free links only up to its own peak use, which
-        # leaves no import fallback once domestic allowances run out earlier (colder
-        # donor weather). An optional dispatch-only capacity restores that fallback.
-        capacity = options.get("import_capacity_MW")
-        if capacity is not None:
-            n.links.loc[links, "p_nom"] = float(capacity)
-            power = float(capacity)
         if not np.isfinite(power):
             raise ValueError("Import conversion requires finite fixed delivery capacities.")
         name = asset + " rolling supply"

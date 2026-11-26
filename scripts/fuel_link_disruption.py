@@ -20,11 +20,12 @@ def consuming_links(n, fuel):
     Pipelines and transport joining two buses of the same raw fuel are excluded.
     Oil refining is upstream (oil primary -> oil) and is not a final-oil use.
     """
-    if fuel not in ('gas', 'oil'):
-        raise ValueError("Fuel-use disruptions support only 'gas' or 'oil'.")
+    if fuel not in ('gas', 'oil', 'biomass'):
+        raise ValueError("Fuel-use disruptions support gas, oil or biomass.")
     input_fuel = n.links.bus0.map(n.buses.carrier)
     output_fuel = n.links.bus1.map(n.buses.carrier)
-    mask = input_fuel.eq(fuel) & ~output_fuel.eq(fuel)
+    carriers = ['biomass', 'solid biomass'] if fuel == 'biomass' else [fuel]
+    mask = input_fuel.isin(carriers) & ~output_fuel.isin(carriers)
     mask &= ~n.links.carrier.isin(['gas pipeline', 'gas pipeline new',
                                   'oil pipeline', 'oil refining'])
     return n.links.index[mask]
@@ -50,17 +51,13 @@ def link_country(n, names):
 def apply_fuel_link_disruptions(n, events):
     """Reduce consuming Links once, after weather/capacity preparation.
 
-    Select all gas/oil uses, exact eligible Links, and/or destination countries.
+    Select gas/oil/biomass uses, exact eligible Links, and/or destination countries.
     Do not restrict upstream supply, pipelines or refining for the same fuel.
     """
     if not isinstance(events, list):
         raise ValueError('fuel_link_disruptions must be a list.')
     if not events:
         return
-    upstream = {row['fuel'] for row in n.meta.get('fuel_generator_disruptions', [])}
-    requested = {event.get('fuel') for event in events if isinstance(event, Mapping)}
-    if upstream.intersection(requested):
-        raise ValueError('Cannot combine upstream supply and consuming-Link reductions for the same fuel.')
     if n.meta.get(META_KEY):
         raise ValueError('Fuel-use disruptions already applied; start from a fresh prepared network.')
     snapshots = n.snapshots
@@ -78,7 +75,7 @@ def apply_fuel_link_disruptions(n, events):
     for i, event in enumerate(events):
         if not isinstance(event, Mapping):
             raise ValueError('Each fuel disruption must be a mapping.')
-        unknown = set(event) - {'name', 'fuel', 'reduction', 'start', 'end', 'links', 'countries'}
+        unknown = set(event) - {'name', 'fuel', 'reduction', 'start', 'end', 'links', 'countries', 'locations'}
         if unknown:
             raise ValueError(f'Unknown fuel disruption settings: {sorted(unknown)}')
         fuel = event.get('fuel')
@@ -108,6 +105,11 @@ def apply_fuel_link_disruptions(n, events):
         if 'countries' in event:
             selected = string_list(event['countries'], 'countries')
             names = names[countries.isin(selected)]
+        if 'locations' in event:
+            selected = string_list(event['locations'], 'locations')
+            destinations = n.links.loc[names, 'bus1']
+            locations = destinations.map(n.buses.location)
+            names = names[locations.isin(selected).to_numpy() | destinations.isin(selected).to_numpy()]
         if names.empty:
             raise ValueError(f'No {fuel} consuming Links match event {name}.')
         table = n.links.loc[names]

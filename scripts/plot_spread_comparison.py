@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Shedding spread compared between networks: 2025, 2035 with V2G, 2035 without V2G.
 

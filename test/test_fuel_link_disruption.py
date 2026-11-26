@@ -8,9 +8,6 @@ import pytest
 import yaml
 
 from scripts.fuel_link_disruption import apply_fuel_link_disruptions, consuming_links, fuel_link_disruption_report
-from scripts.fuel_generator_disruption import apply_fuel_generator_disruptions
-from scripts.run_disruption_campaign import campaign_tasks, load_config, NEW_YEARS
-from scripts.run_fuel_supply_campaign import configfiles
 
 
 def network():
@@ -78,17 +75,6 @@ def test_bad_or_upstream_selection_is_rejected_without_mutation(change):
     pd.testing.assert_frame_equal(n.links_t.p_max_pu,before)
 
 
-@pytest.mark.parametrize('supply_first',[False,True])
-def test_cannot_reduce_upstream_and_consuming_links_for_same_fuel(supply_first):
-    n=network()
-    if supply_first:
-        apply_fuel_generator_disruptions(n,[event(n)])
-        with pytest.raises(ValueError,match='Cannot combine'):
-            apply_fuel_link_disruptions(n,[event(n)])
-    else:
-        apply_fuel_link_disruptions(n,[event(n)])
-        with pytest.raises(ValueError,match='Cannot combine'):
-            apply_fuel_generator_disruptions(n,[event(n)])
 
 
 def test_oil_country_attributed_to_consuming_region_and_overlap_rejected():
@@ -100,24 +86,6 @@ def test_oil_country_attributed_to_consuming_region_and_overlap_rejected():
         apply_fuel_link_disruptions(n,[event(n),{**event(n),'name':'second'}])
 
 
-def test_new_default_campaign_has_only_consuming_link_reductions():
-    root=Path(__file__).resolve().parents[1]
-    assert configfiles()[-2:] == ['config/config.fuel_use_disruption_2025.yaml',
-                                'config/config.fuel_use_winter_test_2025.yaml']
-    c=load_config([root/'config/config.fuel_use_disruption_2025.yaml',
-                   root/'config/config.fuel_use_winter_test_2025.yaml'])
-    tasks=campaign_tasks(c,NEW_YEARS)
-    assert len(tasks)==28
-    assert len({t['target'] for t in tasks})==28
-    for task in tasks:
-        case=task['settings']['cases'][task['case']]
-        assert case['fuel_generator_disruptions']==[]
-        assert case['interconnector_outages']==[]
-        if task['case']=='base_weather':
-            assert case['fuel_link_disruptions']==[]
-        else:
-            assert case['fuel_link_disruptions'][0]['reduction'] in [.5,.75,.9]
-        assert 'fuel_use_winter_test' in task['target']
 
 
 def test_rolling_industry_shortfall_with_original_supply_and_pipeline():

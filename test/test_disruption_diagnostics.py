@@ -1,73 +1,59 @@
-from types import SimpleNamespace
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
 from scripts.disruption_diagnostics import RollingDiagnostics
-from scripts.disruption_resource_budgets import ResourceBudget
+from scripts.solve_disruption_dispatch import write_infeasibility_report
 
 
-def test_storage_states_and_prior_attempt_survive_a_retry(tmp_path):
-    stores = pd.DataFrame([{"carrier": "gas", "bus": "gas", "e_initial": 25.0}], index=["tank"])
-    units = pd.DataFrame([{"carrier": "hydro", "bus": "AC", "state_of_charge_initial": 3.0}], index=["reservoir"])
-    n = SimpleNamespace(components={"Store": SimpleNamespace(static=stores),
-                                    "StorageUnit": SimpleNamespace(static=units)})
-    window = pd.date_range("2013-07-01", periods=4, freq="h")
-    budget = ResourceBudget("bio", "biomass", ("supply",), 100, 40, 5, True, True)
-    first = RollingDiagnostics(tmp_path, {"test": "settings"})
-    with pytest.raises(ValueError, match="test failure"):
-        with first.window(n, 2, window, window[:2], [budget]):
-            first.phase("solve_failed", solver_status="warning", termination_condition="infeasible")
-            raise ValueError("test failure")
-    storage = pd.read_csv(first.directory / "storage_opening.csv")
-    assert storage.opening_MWh.tolist() == [25, 3]
-    context = json.loads((first.directory / "window_context.json").read_text())
-    assert context["window"] == 2
-    assert context["termination_condition"] == "infeasible"
-    second = RollingDiagnostics(tmp_path, {})
-    assert first.directory != second.directory
-    assert (first.directory / "storage_opening.csv").exists()
-    pointer = json.loads((tmp_path / "latest_diagnostics.json").read_text())
-    assert pointer["directory"].endswith(second.directory.name)
+def test_state_saved_only_on_failure_and_retry_preserves_failure(tmp_path):
+    stores=pd.DataFrame([{'carrier':'gas','bus':'gas','e_initial':25.}],index=['tank'])
+    units=pd.DataFrame(columns=['carrier','bus','state_of_charge_initial'])
+    n=SimpleNamespace(components={'Store':SimpleNamespace(static=stores),'StorageUnit':SimpleNamespace(static=units)})
+    hours=pd.date_range('2013-07-01',periods=4,freq='h')
+    d=RollingDiagnostics(tmp_path,{'reference':'base.nc'})
+    assert not (tmp_path/'failures').exists()
+    with d.window(n,0,hours,hours[:2],[]):
+        d.committed({'window':0})
+    assert not (tmp_path/'storage_opening.csv').exists()
+    with pytest.raises(ValueError,match='test failure'):
+        with d.window(n,1,hours,hours[:2],[]):
+            (tmp_path/'solver.log').write_text('failed solver evidence')
+            d.phase('solve_failed',solver_status='warning',termination_condition='infeasible')
+            raise ValueError('test failure')
+    status=json.loads((tmp_path/'status.json').read_text())
+    assert status['window']==1 and status['last_completed_window']==0
+    failure=d.failure_directory
+    assert pd.read_csv(failure/'storage_opening.csv').opening_MWh.tolist()==[25]
+    assert (failure/'solver.log').read_text()=='failed solver evidence'
+    assert 'ValueError: test failure' in (failure/'failure.txt').read_text()
+    retry=RollingDiagnostics(tmp_path,{})
+    assert retry.current['phase']=='initializing'
+    assert failure.exists()
+    assert not (tmp_path/'window_summary.csv').exists()
 
 
-def test_diagnostics_can_be_disabled():
-    diagnostics = RollingDiagnostics(None, {})
-    diagnostics.phase("solving")
-    with diagnostics.window(None, 0, None, None, []):
-        pass
-    diagnostics.committed({"window": 0})
-    assert diagnostics.directory is None
-
-
-def test_iis_keeps_full_model_and_more_than_first_hundred_equations(tmp_path):
-    from scripts.solve_disruption_dispatch import write_infeasibility_report
-
+def test_infeasibility_report_is_compact_and_model_export_opt_in(tmp_path):
+    written=[]
     class Solver:
-        IISMinimal = False
-
-        def setParam(self, name, value):
-            assert (name, value) == ("TimeLimit", 300)
-
-        def write(self, path):
-            from pathlib import Path
-            Path(path).write_text("model capture")
-
-    def print_labels(labels):
-        for label in labels:
-            print(f"constraint-{label}")
-
-    model = SimpleNamespace(
-        solver_model=Solver(),
-        to_netcdf=lambda path: path.write_text("full precision capture"),
-        compute_infeasibilities=lambda: list(range(150)),
-        constraints=SimpleNamespace(print_labels=print_labels),
-    )
-    report = tmp_path / "infeasibility_window_0002.txt"
-    write_infeasibility_report(SimpleNamespace(model=model), report)
-    assert "constraint-99\n" in report.read_text()
-    assert "constraint-149\n" not in report.read_text()
-    assert "constraint-149\n" in report.with_suffix(".constraints.txt").read_text()
-    for suffix in (".mps", ".model.nc", ".ilp"):
-        assert report.with_suffix(suffix).is_file()
+        IISMinimal=False
+        def setParam(self,name,value):
+            assert name=='TimeLimit' and value==10
+        def write(self,path):
+            written.append(path)
+            Path(path).write_text('Bounds: named-variable >= 4')
+    model=SimpleNamespace(solver_model=Solver(),compute_infeasibilities=lambda:[4,9],
+                          constraints=SimpleNamespace(print_labels=lambda labels: print('Bus balance conflict',labels)))
+    path=tmp_path/'infeasibility.txt'
+    write_infeasibility_report(SimpleNamespace(model=model),path,10)
+    assert 'Bus balance conflict [4, 9]' in path.read_text()
+    assert 'named-variable' in path.read_text()
+    assert [p.name for p in tmp_path.iterdir()]==['infeasibility.txt']
+    write_infeasibility_report(SimpleNamespace(model=model),path,10,True)
+    assert path.with_suffix('.mps.gz').exists()
+    model.compute_infeasibilities=lambda: (_ for _ in ()).throw(RuntimeError('unavailable'))
+    write_infeasibility_report(SimpleNamespace(model=model),path,10)
+    assert 'unavailable' in path.read_text()

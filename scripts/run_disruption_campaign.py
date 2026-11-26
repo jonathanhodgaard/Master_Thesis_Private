@@ -1,6 +1,8 @@
-"""Plan and run independent Sophia array tasks (one weather year and case each)."""
+"""List/check/submit independent baseline or disruption tasks on Sophia."""
 import argparse
 from copy import deepcopy
+import csv
+import json
 import os
 from pathlib import Path
 import shlex
@@ -9,14 +11,10 @@ import sys
 
 import yaml
 
-from scripts.disruption_scenarios import select_disruption
+from scripts.disruption_scenarios import select_disruption, common_policy
 
-
-CONFIGFILES = ["config/config.sector_2025.yaml", "config/config.sophia.yaml",
-               "config/config.interconnector_disruption.yaml"]
-RULES = ["dispatch_disruptions", "prepare_disruption_network", "apply_interconnector_disruption",
-         "solve_disruption_dispatch", "plot_outage_dispatch", "plot_outage_missing_demand"]
-NEW_YEARS = ["1965-1966", "1968-1969", "1988-1989", "2019-2020"]
+YEARS = ["2013-2014", "1965-1966", "1968-1969", "1988-1989", "2019-2020"]
+VARIANTS = ["2025", "2035_wo_V2G", "2035_w_V2G"]
 
 
 def merge_config(target, overlay):
@@ -28,98 +26,156 @@ def merge_config(target, overlay):
 
 
 def load_config(paths):
-    config = {}
+    root = Path(__file__).resolve().parents[1]
+    config = yaml.safe_load((root / "config/config.default.yaml").read_text(encoding="utf-8"))
     for path in paths:
-        merge_config(config, yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {})
+        merge_config(config, yaml.safe_load(Path(path).read_text(encoding="utf-8-sig")) or {})
     return config
 
 
-def campaign_tasks(config, years, cases=None):
+def configfiles(variant, campaign, sophia=False):
+    paths = [f"config/config.sector_{variant}.yaml"]
+    if sophia:
+        paths.append("config/config.sophia.yaml")
+    paths.append("config/config.disruption_common.yaml")
+    if campaign != "baseline":
+        paths.append(f"config/config.{'fuel' if campaign == 'fuel' else 'interconnector'}_disruption.yaml")
+    return paths
+
+
+def campaign_tasks(config, years, cases=None, variant=None):
     tasks = []
     for year in years:
-        for case in cases or config["disruption"]["cases"]:
-            selection = {"disruption_weather_year": year, "disruption_case": case}
-            settings = select_disruption({**config, **selection})
-            tasks.append({"year": year, "case": case, "selection": selection,
-                          "settings": settings,
+        selection = {"disruption_weather_year": year}
+        if variant:
+            selection["disruption_variant"] = variant
+        settings = select_disruption({**config, **selection})
+        for case in cases or settings["cases"]:
+            if case not in settings["cases"]:
+                raise ValueError(f"Unknown case {case}.")
+            tasks.append({"year": year, "variant": settings["selected_variant"], "case": case,
+                          "selection": {**selection, "disruption_case": case}, "settings": settings,
+                          "definition": settings["cases"][case],
                           "target": f"{settings['output_directory']}/{case}/network_solved.nc"})
     targets = [task["target"] for task in tasks]
     if not tasks or len(set(targets)) != len(targets):
-        raise ValueError("Campaign must have at least one task and no overlapping output paths.")
+        raise ValueError("Campaign must have tasks with unique output paths.")
     return tasks
 
 
 def check_inputs(tasks):
     paths = set()
     for task in tasks:
-        settings = task["settings"]
-        paths.update(filter(None, [settings["base_network"], settings.get("household_shares"),
-                                 settings["cases"][task["case"]].get("weather_network")]))
+        s = task["settings"]
+        paths.update(filter(None, [s["base_network"], s.get("household_shares"), s.get("weather_network")]))
+        if s["campaign"] != "baseline":
+            paths.update(f"{s['baseline_directory']}/{name}" for name in
+                         ("network_prepared.nc", "base_weather/network_solved.nc", "event_windows.csv",
+                          "base_weather/run_info.json", "base_weather/status.json"))
     missing = sorted(path for path in paths if not Path(path).is_file())
     if missing:
-        raise FileNotFoundError("Required external inputs are missing (build donors separately):\n" + "\n".join(missing))
+        raise FileNotFoundError("Missing inputs; build references/donors, then run baselines before disruptions:\n" + "\n".join(missing))
+    checked = set()
+    for task in tasks:
+        s = task["settings"]
+        if s["campaign"] == "baseline" or s["baseline_directory"] in checked:
+            continue
+        checked.add(s["baseline_directory"])
+        directory = Path(s["baseline_directory"]) / "base_weather"
+        info = json.loads((directory / "run_info.json").read_text())
+        status = json.loads((directory / "status.json").read_text())
+        effective = load_config(task.get("configfiles") or configfiles(task["variant"], s["campaign"]))
+        solving = effective["solving"]
+        if status.get("phase") != "complete" or info.get("common_policy") != common_policy(s, solving, effective):
+            raise ValueError(f"Baseline incomplete or common settings changed: {directory}. Rerun baselines first.")
+        sources = [Path(value) for value in (s["base_network"], s.get("household_shares"), s.get("weather_network")) if value]
+        sources += [Path(__file__).parent / name for name in (
+            "prepare_network_disruptions.py", "solve_disruption_dispatch.py", "rolling_disruption_dispatch.py",
+            "heat_vent_capacity.py", "household_heat_constraints.py", "disruption_storage_msv.py",
+            "disruption_resource_budgets.py", "fuel_demand_shedding.py", "hydrogen_balance_shedding.py",
+            "disruption_waste_hvc.py", "disruption_diagnostics.py", "disruption_scenarios.py",
+            "resource_budget_duals.py", "solve_network.py")]
+        solved_time = (directory / "network_solved.nc").stat().st_mtime_ns
+        if any(path.stat().st_mtime_ns > solved_time for path in sources):
+            raise ValueError(f"Baseline source inputs/code changed: {directory}. Rerun baselines first.")
+        timing = directory.parent / "event_windows.csv"
+        analysis_code = Path(__file__).parent / "analyse_disruption_windows.py"
+        if timing.stat().st_mtime_ns < max(solved_time, analysis_code.stat().st_mtime_ns):
+            raise ValueError(f"Event windows are stale: {timing}. Rerun baseline timing analysis first.")
+        with timing.open(newline="", encoding="utf-8-sig") as stream:
+            rows = list(csv.DictReader(stream))
+        if (len(rows) != len(s["durations_hours"])
+                or {int(row["duration_hours"]) for row in rows} != set(s["durations_hours"])
+                or any(row["variant"] != task["variant"] or row["weather_year"] != task["year"] for row in rows)):
+            raise ValueError(f"Event window identity/durations differ from campaign: {timing}.")
+
 
 
 def task_targets(task):
-    targets = [task["target"]]
-    settings = task["settings"]
-    directory = f"{settings['output_directory']}/{task['case']}"
-    targets += [f"{directory}/{report}.csv" for report in
-                ("fuel_shedding_by_demand", "fuel_shedding_by_fuel", "fuel_shedding_timeseries",
-                 "fuel_generator_disruptions", "fuel_link_disruptions",
-                 "hydrogen_shedding_by_bus", "hydrogen_shedding_timeseries")]
-    plotting = settings.get("plotting", {})
-    if plotting.get("enable", True):
-        label = plotting.get("region_label", "DK2")
-        directory = f"{settings['output_directory']}/{task['case']}/plots"
-        # Same paths as case_plot_file() in rules/plot_disruption.smk:
-        # plots/<plot>/<plot>_<label>_<case>_<year>_<kind>.png
-        year = settings.get("selected_weather_year")
-        tag = f"{task['case']}_{year}" if year else task["case"]
-        targets += [f"{directory}/{plot}/{plot}_{label}_{tag}_{kind}.png"
-                    for plot in ("dispatch_year", "dispatch_zoom", "demand_shares", "production_shares")
-                    for kind in ("power", "heat")]
-    # Comparison plots are deliberately a separate, post-array invocation.
+    directory = str(Path(task["target"]).parent).replace("\\", "/")
+    targets = [f"{directory}/{name}" for name in
+               ("network_solved.nc", "dispatch_summary.csv", "window_summary.csv", "resource_usage.csv")]
+    if task["settings"]["campaign"] == "baseline":
+        targets.append(f"{task['settings']['baseline_directory']}/event_windows.csv")
+    else:
+        targets.append(f"{directory}/applied_disruption.csv")
     return targets
 
 
-def main(argv=None, default_configfiles=None):
+def plan_rows(tasks):
+    for index, task in enumerate(tasks):
+        start = end = ""
+        hours = task["definition"].get("duration_hours", "")
+        timing = Path(task["settings"]["baseline_directory"]) / "event_windows.csv"
+        if hours and timing.exists():
+            with timing.open(newline="", encoding="utf-8-sig") as stream:
+                matches = [row for row in csv.DictReader(stream) if int(row["duration_hours"]) == hours]
+            if len(matches) != 1:
+                raise ValueError(f"Missing or duplicate duration {hours} in {timing}.")
+            start, end = matches[0]["start"], matches[0]["end"]
+        yield {"task_index": index, "variant": task["variant"], "weather_year": task["year"],
+               "case": task["case"], "duration_hours": hours, "start": start, "end": end,
+               "baseline": f"{task['settings']['baseline_directory']}/base_weather/network_solved.nc",
+               "target": task["target"]}
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("--configfiles", nargs="+", default=default_configfiles or CONFIGFILES)
-    parser.add_argument("--years", default=",".join(NEW_YEARS), help="Comma-separated July-June years")
-    parser.add_argument("--cases", help="Comma-separated case names; default: all configured cases")
-    parser.add_argument("--list", action="store_true", help="Print stable zero-based task mapping")
-    parser.add_argument("--check-inputs", action="store_true", help="Check inputs for every selected task, then exit")
-    parser.add_argument("--task-index", type=int, default=None)
-    parser.add_argument("--run-year", action="store_true",
-                        help="Run all selected cases sequentially for exactly one weather year; stop on failure")
+    parser.add_argument("--campaign", choices=["baseline", "interconnector", "fuel"], required=True)
+    parser.add_argument("--variant", choices=[*VARIANTS, "all"], default="2025")
+    parser.add_argument("--years", default=",".join(YEARS))
+    parser.add_argument("--cases", help="Comma-separated generated case names")
+    parser.add_argument("--sophia", action="store_true")
+    parser.add_argument("--list", action="store_true")
+    parser.add_argument("--write-plan", type=Path, help="Write a reviewable CSV task mapping; does not run jobs")
+    parser.add_argument("--check-inputs", action="store_true")
+    parser.add_argument("--task-index", type=int)
     parser.add_argument("--cores", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     parser.add_argument("--dry-run", action="store_true")
-    args, extra = parser.parse_known_args(argv)
-    config = load_config(args.configfiles)
-    tasks = campaign_tasks(config, args.years.split(","),
-                           args.cases.split(",") if args.cases else None)
-    if args.list:
-        for index, task in enumerate(tasks):
-            print(f"{index}\t{task['year']}\t{task['case']}\t{task['target']}")
+    args = parser.parse_args(argv)
+    tasks = []
+    for variant in VARIANTS if args.variant == "all" else [args.variant]:
+        paths = configfiles(variant, args.campaign, args.sophia)
+        config = load_config(paths)
+        for task in campaign_tasks(config, args.years.split(","), args.cases.split(",") if args.cases else None, variant):
+            task["configfiles"] = paths
+            tasks.append(task)
+    if args.check_inputs or args.write_plan:
+        check_inputs(tasks)
+    if args.list or args.write_plan:
+        rows = list(plan_rows(tasks))
+        if args.write_plan:
+            args.write_plan.parent.mkdir(parents=True, exist_ok=True)
+            with args.write_plan.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+        if args.list:
+            for row in rows:
+                print("\t".join(str(value) for value in row.values()))
         return
     if args.check_inputs:
-        check_inputs(tasks)
-        print(f"External inputs exist for all {len(tasks)} tasks.")
-        return
-    if args.run_year:
-        if len(args.years.split(",")) != 1 or args.task_index is not None or "SLURM_ARRAY_TASK_ID" in os.environ:
-            parser.error("--run-year requires exactly one year and no task index/Slurm array.")
-        check_inputs(tasks)
-        for index in range(len(tasks)):
-            command = [sys.executable, "-m", "scripts.run_disruption_campaign",
-                       "--configfiles", *args.configfiles, "--years", args.years,
-                       "--task-index", str(index), "--cores", str(args.cores)]
-            if args.cases:
-                command += ["--cases", args.cases]
-            if args.dry_run:
-                command.append("--dry-run")
-            subprocess.run(command + extra, check=True)
+        print(f"Inputs exist for all {len(tasks)} tasks.")
         return
     index = args.task_index
     if index is None and "SLURM_ARRAY_TASK_ID" in os.environ:
@@ -128,19 +184,18 @@ def main(argv=None, default_configfiles=None):
         parser.error(f"Provide --task-index or SLURM_ARRAY_TASK_ID in 0..{len(tasks)-1}.")
     task = tasks[index]
     check_inputs([task])
-    # Array tasks own disjoint case directories. No task builds shared inputs or
-    # writes comparison plots; this is the only supported use of --nolock here.
-    command = ["snakemake", *task_targets(task), "--executor", "local", "--nolock",
-               "--allowed-rules", *RULES, "--rerun-triggers", "mtime",
-               "--configfiles", *args.configfiles, "--cores", str(args.cores),
-               "--resources", "mem_mb=64000", "--printshellcmds",
+    rules = (["prepare_disruption_network", "solve_disruption_baseline", "analyse_disruption_windows"]
+             if args.campaign == "baseline" else ["apply_disruption", "solve_disruption_dispatch"])
+    # Each task owns a different output directory. Disruption jobs cannot build shared inputs.
+    command = ["snakemake", *task_targets(task), "--executor", "local", "--nolock", "--rerun-incomplete",
+               "--allowed-rules", *rules, "--configfiles", *task["configfiles"],
+               "--cores", str(args.cores), "--resources", "mem_mb=64000", "--printshellcmds",
                "--config", *[f"{key}={value}" for key, value in task["selection"].items()]]
     if os.environ.get("TMPDIR"):
         command += ["--default-resources", f"tmpdir={os.environ['TMPDIR']}"]
     if args.dry_run:
         command.append("--dry-run")
-    command += extra
-    print(f"Task {index}: {task['year']} / {task['case']}", flush=True)
+    print(f"Task {index}: {task['variant']} / {task['year']} / {task['case']}", flush=True)
     print(shlex.join(command), flush=True)
     subprocess.run(command, check=True)
 

@@ -1,12 +1,10 @@
 # SPDX-License-Identifier: MIT
 """Apply scheduled interconnector outages after weather/capacity preparation."""
 from collections.abc import Mapping
-from pathlib import Path
 
 import networkx as nx
 import numpy as np
 import pandas as pd
-import pypsa
 
 
 def bridge_line_names(n):
@@ -135,14 +133,3 @@ def apply_interconnector_outages(n, events):
     for (component, attr), frame in profiles.items():
         n.components[component].dynamic[attr] = frame
     n.meta = {**(n.meta or {}), "interconnector_outages": records}
-
-
-if __name__ == "__main__":
-    n = pypsa.Network(snakemake.input.net)
-    apply_interconnector_outages(n, snakemake.params.events)
-    from scripts.fuel_generator_disruption import apply_fuel_generator_disruptions
-    apply_fuel_generator_disruptions(n, snakemake.params.get("fuel_events", []))
-    from scripts.fuel_link_disruption import apply_fuel_link_disruptions
-    apply_fuel_link_disruptions(n, snakemake.params.get("fuel_link_events", []))
-    Path(snakemake.output.net).parent.mkdir(parents=True, exist_ok=True)
-    n.export_to_netcdf(snakemake.output.net)

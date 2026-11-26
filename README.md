@@ -9,7 +9,7 @@ SPDX-License-Identifier: CC-BY-4.0
 ![Size](https://img.shields.io/github/repo-size/pypsa/pypsa-eur)
 [![Zenodo PyPSA-Eur](https://zenodo.org/badge/DOI/10.5281/zenodo.3520874.svg)](https://doi.org/10.5281/zenodo.3520874)
 [![Zenodo PyPSA-Eur-Sec](https://zenodo.org/badge/DOI/10.5281/zenodo.3938042.svg)](https://doi.org/10.5281/zenodo.3938042)
-[![Snakemake](https://img.shields.io/badge/snakemake-≥9-brightgreen.svg?style=flat)](https://snakemake.readthedocs.io)
+[![Snakemake](https://img.shields.io/badge/snakemake-â‰¥9-brightgreen.svg?style=flat)](https://snakemake.readthedocs.io)
 [![Discord](https://img.shields.io/discord/911692131440148490?logo=discord)](https://discord.gg/AnuJBk23FU)
 [![REUSE status](https://api.reuse.software/badge/github.com/pypsa/pypsa-eur)](https://api.reuse.software/info/github.com/pypsa/pypsa-eur)
 
@@ -68,59 +68,17 @@ See **[Thesis changes, scripts, workflow rules and usage](doc/thesis_changes.md)
 with the release, new and modified scripts/rules, scenario configurations, inputs, reports,
 compatibility fixes, and companion data-preparation scripts. Notebooks are excluded.
 
-New rolling/disruption runs use **`config/config.interconnector_disruption.yaml`** for all dispatch
-settings and cases, loaded after the separate sector configuration (and `config/config.sophia.yaml`
-on Sophia). It includes a matching baseline, single/combined winter interconnector outages,
-and an Eastern Denmark electrical-isolation case. Current settings use a 168-hour horizon,
-48-hour overlap (**120 hours implemented**), 168-hour waste periods, original distribution-grid
-capacities, and monthly-average thermal-pit MSVs. Other selected storage MSVs retain their
-configured aggregation. Existing heat vents are resized during preparation.
-Selected fuel-delivery accounting links are doubled directly, preserving their original
-costs and emissions. The legacy `fuel_backup` setting adds no parallel links or price premium;
-its `capacity_multiplier: 1.0` means 100% additional capacity. Capacity adjustments are saved
-in network metadata; the retained `fuel_backup_dispatch.csv` has headers only.
-The 2025 and both 2035 sector configs cap Øresund AC exchange at 1,700 MW towards
-Sweden and 1,300 MW towards Zealand, retaining transmission losses. These limits
-are stored in base-network metadata and enforced again in every rolling window.
-They also freeze the additional western Denmark–Zealand gas-pipeline candidate at
-zero capacity; the existing 1,500 MW gas connection is unchanged. Rebuild and solve
-the base networks before running dispatch with these settings.
-Submit `sbatch run_dispatch_2025.sbatch` for all configured cases, or
-`sbatch --export=ALL,DISRUPTION_CASE=se_interconnector run_dispatch_2025.sbatch` for one case.
-The full reference year is simulated; outage start/end dates only control connection availability.
-Results go to `results/disruptions/sector_2025_interconnector_disruption/<weather-year>/<case>/`.
-For the four additional weather years, donor setup, independent Sophia array jobs,
-weather-year folders and the Gøtske year-selection check, see
-[the interconnector campaign guide](doc/interconnector_campaign.md).
-For matching 2035 V2G/without-V2G tests, original weather first and then one
-weather year per batch job, see [the 2035 campaign guide](doc/interconnector_2035_campaign.md).
-Solid-biomass Stores start empty in every modelled country; subsequent domestic supply is capped
-by the annual potential and priced with the reference scarcity premium. Supply is not compulsory.
-Imports and interregional biomass transport retain their frozen delivery capacities.
-Shared coal and refined-oil Stores also start empty, selected by exact asset name; fuel supplies,
-refining and storage capacities remain available. Gas in all countries uses the existing
-reference-state initialization, with no percentage fill override for Danish gas. Frozen gas capacities still require
-working-gas-volume calibration. Earlier experiment
-overlays are available in Git history and should not be appended to the consolidated configuration.
+The active disruption workflow is documented in **[Disruption campaign](doc/disruption_campaign.md)**.
+It prepares 15 matching rolling baselines, selects DK2 maximum-residual-load windows of
+1/24/168/720/2160 hours, and runs 525 interconnector plus 675 DK2 fuel-use disruptions.
+The two campaign configs share `config/config.disruption_common.yaml`. New outputs go
+exclusively to `results/disruption_campaign_v2/`; historical saved results are untouched.
 
-Enabled heat-disposal sinks are sized from the combined heat-input capacity at each bus, rather
-than heat demand or baseline vent usage. The rating follows capacity expansion in base solves
-and is refreshed from frozen capacities when preparing disruption dispatch from older bases.
+Start on Sophia with `sbatch run_disruption_baselines.sbatch`, review the selected windows,
+then use `run_interconnector_<variant>.sbatch` and `run_fuel_<variant>.sbatch`.
+The guide includes input checks, task-table previews, batch subsets, plotting and compact
+failure diagnostics. Historical test overlays and compatibility launchers are retired.
 
-## Plot existing local disruption results
-
-The eight saved local cases are under `results/disruptions/sector_2025_dispatch/<case>/network_solved.nc`.
-Load the local plotting overlay last to use that folder and the case labels from the disruption configuration:
-
-```powershell
-pixi run snakemake plot_disruptions --cores 2 --allowed-rules plot_outage_dispatch plot_outage_missing_demand --configfiles config/config.sector_2025.yaml config/config.interconnector_disruption.yaml config/config.local_plot_test.yaml
-```
-
-Append `--dry-run` to preview the jobs. This command only allows plotting rules and uses existing solved networks.
-Per-case PNG/PDF figures are written to `<case>/plots/`; comparison figures and summary/hourly CSVs
-are written to `results/disruptions/sector_2025_dispatch/plots/`.
-The local overlay sets the default target to `plot_disruptions` and skips cases without a saved solved network.
-It selects older saved results; loading newer dispatch settings does not change those networks.
 
 # Warnings
 

@@ -1,86 +1,109 @@
-"""Small persistent rolling-window records, independent of workflow outputs."""
+"""One live status record; detailed state is written only on failure."""
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
-import hashlib
 import json
-import os
+import logging
 from pathlib import Path
+import shutil
 import traceback
 
 import pandas as pd
 
 
+def write_json(path, value):
+    path = Path(path)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2, default=str), encoding="utf-8")
+    temporary.replace(path)
+
+
+def close_solver_log(n, solver_name):
+    """Close the native log stream before rotating the next window's log."""
+    solver = getattr(getattr(n, "model", None), "solver_model", None)
+    if solver is None:
+        return
+    try:
+        if solver_name == "gurobi":
+            solver.setParam("LogFile", "")
+        elif solver_name == "highs":
+            solver.setOptionValue("log_file", "")
+    except Exception:
+        logging.getLogger(__name__).warning("Could not close the solver log stream", exc_info=True)
+
+
 class RollingDiagnostics:
     def __init__(self, output_directory, config):
-        self.directory = None
+        self.directory = Path(output_directory) if output_directory is not None else None
         self.current = {}
-        if output_directory is None:
-            return
-        root = Path(output_directory)
-        attempt = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + f"-{os.getpid()}"
-        self.directory = root / "diagnostics" / attempt
-        self.directory.mkdir(parents=True, exist_ok=False)
-        self.pointer = root / "latest_diagnostics.json"
-        self.write_json("config.json", config)
-        code_root = Path(__file__).resolve().parent
-        names = ["rolling_disruption_dispatch.py", "solve_disruption_dispatch.py",
-                 "disruption_resource_budgets.py", "disruption_storage_msv.py",
-                 "disruption_waste_hvc.py", "prepare_network_disruptions.py",
-                 "interconnector_disruption.py", "household_heat_constraints.py",
-                 "solve_network.py", "disruption_diagnostics.py", "fuel_demand_shedding.py",
-                 "fuel_generator_disruption.py", "fuel_link_disruption.py",
-                 "hydrogen_balance_shedding.py"]
-        self.write_json("provenance.json", {
-            "slurm": {key: os.environ.get(key) for key in
-                      ("SLURM_JOB_ID", "SLURM_ARRAY_JOB_ID", "SLURM_ARRAY_TASK_ID", "SLURM_JOB_NAME")},
-            "script_sha256": {name: hashlib.sha256((code_root / name).read_bytes()).hexdigest()
-                              for name in names},
-        })
+        self._failure_directory = None
+        self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        if self.directory is not None:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            write_json(self.directory / "run_info.json", config)
+            (self.directory / "window_summary.csv").unlink(missing_ok=True)
         self.phase("initializing")
 
-    def write_json(self, name, value):
-        (self.directory / name).write_text(json.dumps(value, indent=2, default=str), encoding="utf-8")
+    @property
+    def failure_directory(self):
+        if self.directory is None:
+            return None
+        if self._failure_directory is None:
+            self._failure_directory = self.directory / "failures" / self.run_id
+            self._failure_directory.mkdir(parents=True, exist_ok=False)
+        return self._failure_directory
 
     def phase(self, phase, **details):
-        if self.directory is None:
-            return
-        self.current.update(phase=phase, updated_utc=datetime.now(timezone.utc).isoformat(), **details)
-        self.write_json("window_context.json", self.current)
-        self.pointer.write_text(json.dumps({
-            "directory": str(Path("diagnostics") / self.directory.name),
-            **self.current,
-        }, indent=2, default=str), encoding="utf-8")
+        self.current.update(phase=phase, run_id=self.run_id,
+                            updated_utc=datetime.now(timezone.utc).isoformat(), **details)
+        if self.directory is not None:
+            write_json(self.directory / "status.json", self.current)
 
-    def append(self, name, rows):
-        if not rows:
+    @staticmethod
+    def opening_states(n):
+        rows = []
+        for component, initial in (("Store", "e_initial"), ("StorageUnit", "state_of_charge_initial")):
+            for name, row in n.components[component].static.iterrows():
+                rows.append({"component": component, "asset": name, "carrier": row.carrier,
+                             "bus": row.bus, "opening_MWh": float(row[initial])})
+        return rows
+
+    def failure(self, exc, n=None, budgets=(), opening=None, resources=None):
+        current_solver_log = "window" in self.current or self.current.get("phase") in ("solving", "solve_failed")
+        self.phase("failed", exception_type=type(exc).__name__, error=str(exc))
+        destination = self.failure_directory
+        if destination is None:
             return
-        path = self.directory / name
-        pd.DataFrame(rows).to_csv(path, mode="a", header=not path.exists(), index=False)
+        context = json.dumps(self.current, indent=2, default=str)
+        (destination / "failure.txt").write_text(context + "\n\n" + traceback.format_exc(), encoding="utf-8")
+        if n is not None:
+            rows = opening if opening is not None else self.opening_states(n)
+            pd.DataFrame(rows, columns=["component", "asset", "carrier", "bus", "opening_MWh"]).to_csv(
+                destination / "storage_opening.csv", index=False)
+            rows = resources if resources is not None else [asdict(b) for b in budgets]
+            frame = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["identifier", "carrier", "remaining_MWh"])
+            frame.to_csv(destination / "resource_remaining.csv", index=False)
+        log = self.directory / "solver.log"
+        if current_solver_log and log.exists():
+            shutil.copy2(log, destination / "solver.log")
 
     @contextmanager
     def window(self, n, number, window, implemented, budgets):
+        self.phase("building_model", window=number,
+                   optimization_start=str(window[0]), optimization_end=str(window[-1]),
+                   implemented_start=str(implemented[0]), implemented_end=str(implemented[-1]))
         if self.directory is not None:
-            self.phase("building_model", window=number,
-                       optimization_start=str(window[0]), optimization_end=str(window[-1]),
-                       implemented_start=str(implemented[0]), implemented_end=str(implemented[-1]))
-            self.append("resource_ledger.csv", [{"window": number, **asdict(b)} for b in budgets])
-            rows = []
-            for component, initial in (("Store", "e_initial"), ("StorageUnit", "state_of_charge_initial")):
-                table = n.components[component].static
-                for name, row in table.iterrows():
-                    rows.append({"window": number, "component": component, "asset": name,
-                                 "carrier": row.carrier, "bus": row.bus,
-                                 "opening_MWh": float(row[initial])})
-            self.append("storage_opening.csv", rows)
+            (self.directory / "solver.log").unlink(missing_ok=True)
+        opening = self.opening_states(n) if self.directory is not None else None
+        resources = [asdict(b) for b in budgets] if self.directory is not None else None
         try:
             yield
         except Exception as exc:
-            self.phase("failed", exception_type=type(exc).__name__, error=str(exc),
-                       traceback=traceback.format_exc())
+            self.failure(exc, n, budgets, opening, resources)
             raise
 
     def committed(self, row):
         if self.directory is not None:
-            self.append("rolling_progress.csv", [row])
-            self.phase("window_completed", window=row["window"])
+            path = self.directory / "window_summary.csv"
+            pd.DataFrame([row]).to_csv(path, mode="a", header=not path.exists(), index=False)
+        self.phase("window_completed", last_completed_window=row["window"])

@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Aftershock of an interconnector outage in DK2: does the effect stop when the cables
 come back?
@@ -83,7 +85,7 @@ def plot_year(dprice, dshed, cases, labels, colors, base_case, spans, offset):
     axes[0].axhline(0, color="#4d4d4d", lw=0.8)
     axes[0].set_yscale("symlog", linthresh=LINTHRESH, linscale=0.5)
     axes[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:+,.0f}" if y else "0"))
-    axes[0].set_ylabel(f"price difference to\n{labels.get(base_case, base_case)} (€/MWh,\n"
+    axes[0].set_ylabel(f"price difference to\n{labels.get(base_case, base_case)} (â‚¬/MWh,\n"
                        "7-day mean of daily means)")
     axes[1].set_ylim(bottom=0)
     axes[1].set_ylabel("load shedding\n(GWh per day)")

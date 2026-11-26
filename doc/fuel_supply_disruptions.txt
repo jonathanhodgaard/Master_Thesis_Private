@@ -1,11 +1,6 @@
-Legacy upstream fuel-supply experiment
-=====================================
+This experiment guide is superseded by doc/disruption_campaign.md.
 
-The default runner was corrected to use consuming-Link restrictions, following
-the requested Nicoline-style approach. See doc/fuel_use_disruptions.txt and
-config/config.fuel_use_disruption_2025.yaml for the active campaign.
-
-The older config.fuel_supply_disruption_2025.yaml and winter overlay describe
-the separate upstream Generator experiment. They are retained for explicit
-use only; neither default fuel runner loads them. Do not merge the supply and
-fuel-use campaign configurations. Same-fuel supply/use restrictions are rejected.
+The active campaign uses shared fixed-capacity preparation, baseline-selected event
+windows, DK2-only consuming-Link fuel reductions and compact outputs/diagnostics.
+Existing results are unchanged. The previous guide and experiment configurations
+remain available in Git history.

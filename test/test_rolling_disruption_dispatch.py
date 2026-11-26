@@ -86,19 +86,18 @@ def test_diagnostics_preserve_committed_progress_and_failed_window(tmp_path, mon
     directory = tmp_path / "case"
     with pytest.raises(RuntimeError, match="Injected second-window"):
         run(n, ref, output_directory=directory)
-    pointer = json.loads((directory / "latest_diagnostics.json").read_text())
-    diagnostics = directory / pointer["directory"]
-    assert pointer["phase"] == "failed"
-    assert pointer["window"] == 1
-    assert "Injected second-window" in pointer["error"]
-    progress = pd.read_csv(diagnostics / "rolling_progress.csv")
+    status = json.loads((directory / "status.json").read_text())
+    assert status["phase"] == "failed" and status["window"] == 1
+    assert "Injected second-window" in status["error"]
+    progress = pd.read_csv(directory / "window_summary.csv")
     assert progress.window.tolist() == [0]
-    ledger = pd.read_csv(diagnostics / "resource_ledger.csv")
-    assert set(ledger.window) == {0, 1}
-    assert ledger.loc[ledger.window.eq(1), "remaining_MWh"].iloc[0] == pytest.approx(
+    failures = list((directory / "failures").iterdir())
+    assert len(failures) == 1
+    ledger = pd.read_csv(failures[0] / "resource_remaining.csv")
+    assert ledger.remaining_MWh.iloc[0] == pytest.approx(
         8 - n.generators_t.p.loc[ref.snapshots[:2], "bio"].sum())
-    assert (diagnostics / "config.json").is_file()
-    assert (diagnostics / "provenance.json").is_file()
+    assert (failures[0] / "storage_opening.csv").exists()
+    assert (directory / "run_info.json").exists()
 
 
 @pytest.mark.parametrize("enforce", [False, True])
@@ -268,7 +267,7 @@ def test_configured_fuel_msv_prices_opening_stocks_against_new_supply():
     # A synthetic reference value distinguishes opening-stock opportunity cost
     # from its original handling cost, using all reference hours for the mean.
     ref.stores_t.mu_energy_balance.loc[:, fuels] = np.array([10, 30, 50])[:, None]
-    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    path = Path(__file__).resolve().parents[1] / "config/config.disruption_common.yaml"
     msv = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]["msv"]
     n = ref.copy()
     reports = run(n, ref, options={"horizon": 2, "overlap": 1, "storage": {"msv": msv}})
@@ -277,8 +276,8 @@ def test_configured_fuel_msv_prices_opening_stocks_against_new_supply():
         # stock instead of buying at 40-42.
         np.testing.assert_allclose(n.stores_t.p[fuel], 0 if i % 2 == 0 else 1, atol=1e-7)
         np.testing.assert_allclose(n.generators_t.p[fuel], 1 if i % 2 == 0 else 0, atol=1e-7)
-    assert set(reports["storage_msv"].asset) == set(fuels)
-    assert reports["storage_msv"].MSV_EUR_per_MWh_stored.eq(30).all()
+    assert {r["asset"] for r in n.meta["disruption_storage_msv"]} == set(fuels)
+    assert all(r["MSV_EUR_per_MWh_stored"] == 30 for r in n.meta["disruption_storage_msv"])
 
 
 @pytest.mark.parametrize("start_position", [0, 2])
@@ -547,7 +546,7 @@ def test_initial_inventory_selects_only_requested_country_and_carrier():
 
 
 def test_consolidated_dispatch_enforces_fuel_caps_and_preserves_reference_gas():
-    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    path = Path(__file__).resolve().parents[1] / "config/config.disruption_common.yaml"
     rolling = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]
     assert rolling["resources"]["enforce_allowances"] is True
     assert rolling["storage"]["initial_state"] == "base_previous_snapshot"
@@ -621,7 +620,7 @@ def test_configured_zero_fuel_stocks_preserve_cyclic_reference_gas_stock():
         ref.add("Store", "EU "+carrier+" Store", bus="EU "+carrier, carrier=carrier,
                 e_nom=10, e_initial=2, e_cyclic=True)
         ref.stores_t.e["EU "+carrier+" Store"] = [7, 8]
-    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    path = Path(__file__).resolve().parents[1] / "config/config.disruption_common.yaml"
     storage = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]
     n = ref.copy()
     initialize_storage(n, ref, ref.snapshots[0], storage)
@@ -646,7 +645,7 @@ def test_empty_shared_fuel_stores_can_refill_from_preserved_supply():
     solve(ref)
     for name in ref.stores.index:
         ref.stores_t.e[name] += 5
-    path = Path(__file__).resolve().parents[1] / "config/config.interconnector_disruption.yaml"
+    path = Path(__file__).resolve().parents[1] / "config/config.disruption_common.yaml"
     storage = yaml.safe_load(path.read_text(encoding="utf-8"))["disruption"]["rolling_horizon"]["storage"]
     fossil_rules = [rule for rule in storage["initial_inventory"] if "assets" in rule]
     n = ref.copy()

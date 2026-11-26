@@ -1,0 +1,172 @@
+# Shared fixed-capacity dispatch policy. Load after the matching sector config.
+# Reference MSVs, scarcity prices and opening states come from variants.*.base_network.
+# Donor weather changes operating profiles only; baselines and events share this policy.
+run:
+  default_target_rule: dispatch_disruptions
+disruption:
+  rolling_horizon:
+    horizon: 168
+    overlap: 48
+    simulation:
+      start: null
+      end: null
+    resources:
+      apply_scarcity_prices: true
+      enforce_allowances: true
+      overrides: {}
+    storage:
+      initial_state: base_previous_snapshot
+      initial_inventory:
+      - countries:
+        - NL
+        - DE
+        - DK
+        - SE
+        - 'NO'
+        - FI
+        - GB
+        carriers:
+        - biomass
+        start_month_day: 07-01
+        fill_fraction: 0.0
+        basis: 'Zero opening solid-biomass inventory sensitivity: remove inherited
+          cyclic reference stocks so domestic supply and imports account for all material
+          used.'
+      - assets:
+        - EU coal Store
+        - EU oil Store
+        carriers:
+        - coal
+        - oil
+        start_month_day: 07-01
+        fill_fraction: 0.0
+        basis: 'Zero opening coal and refined-oil inventory sensitivity: replace uncalibrated
+          cyclic reference endowments with purchases during dispatch.'
+      msv:
+        enable: true
+        source: mu_energy_balance
+        aggregation: hourly
+        aggregation_by_carrier:
+          urban central water pits: monthly_mean
+          gas: annual_mean
+          biomass: annual_mean
+          coal: annual_mean
+          lignite: annual_mean
+          oil: annual_mean
+          methanol: annual_mean
+          H2 Store: annual_mean
+          ammonia store: annual_mean
+          hydro: annual_mean
+        stores:
+          carriers:
+          - urban central water pits
+          - gas
+          - biomass
+          - coal
+          - lignite
+          - oil
+          - methanol
+          - H2 Store
+          - ammonia store
+          assets: []
+        storage_units:
+          carriers:
+          - hydro
+          assets: []
+    co2:
+      replace_budget_with_price: true
+    waste_hvc:
+      mode: uniform_arrivals
+      treatment_period_hours: 168
+      backlog_hours: 168
+      initial_backlog_MWh: 0
+      require_empty_at_period_end: true
+  heat_vent:
+    resize_to_heat_input_capacity: true
+  load_shedding:
+    elec_cost: 23300
+    heat_cost: 100000
+    fuel:
+      enable: true
+      default_cost: 23300
+      costs_by_fuel:
+        oil: 23300
+        gas: 23300
+        biomass: 23300
+        hydrogen: 200000
+      costs_by_carrier: {}
+      costs_by_load: {}
+      regional_cost_adders: {}
+      demand_carriers: {}
+      hydrogen_balance:
+        enable: true
+        cost: 200000
+        costs_by_bus: {}
+    regional_cost_adders:
+      DK0 0AC: 100
+  default_variant: '2025'
+  default_weather_year: 2013-2014
+  campaign: baseline
+  output_root: results/disruption_campaign_v2
+  region: DK0 0AC
+  durations_hours:
+  - 1
+  - 24
+  - 168
+  - 720
+  - 2160
+  renewable_carriers:
+  - onwind
+  - offwind-ac
+  - offwind-dc
+  - offwind-float
+  - solar
+  - solar-hsat
+  - solar rooftop
+  biomass_import_capacity_MW: 50000
+  iis_time_limit: 60
+  save_failed_model: false
+  variants:
+    '2025':
+      run_name: sector_2025
+      planning_horizon: 2025
+      base_network: results/sector_2025/networks/base_s_10___2025.nc
+      household_shares: results/sector_2025/csvs/household_heat_shares_base_s_10___2025.csv
+    2035_wo_V2G:
+      run_name: sector_2035_wo_V2G
+      planning_horizon: 2035
+      base_network: results/sector_2035_wo_V2G/networks/base_s_10___2035.nc
+      household_shares: results/sector_2035_wo_V2G/csvs/household_heat_shares_base_s_10___2035.csv
+    2035_w_V2G:
+      run_name: sector_2035_w_V2G
+      planning_horizon: 2035
+      base_network: results/sector_2035_w_V2G/networks/base_s_10___2035.nc
+      household_shares: results/sector_2035_w_V2G/csvs/household_heat_shares_base_s_10___2035.csv
+  weather_years:
+    2013-2014:
+      network: null
+    1965-1966:
+      network: resources/weather_1965_66/{run_name}/networks/base_s_10___{planning_horizon}.nc
+    1968-1969:
+      network: resources/weather_1968_69/{run_name}/networks/base_s_10___{planning_horizon}.nc
+    1988-1989:
+      network: resources/weather_1988_89/{run_name}/networks/base_s_10___{planning_horizon}.nc
+    2019-2020:
+      network: resources/weather_2019_20/{run_name}/networks/base_s_10___{planning_horizon}.nc
+  plotting:
+    enable: false
+    region: DK0 0AC
+    region_label: DK2
+    shed_noise_mw: 0.1
+    zoom_windows: {}
+solving:
+  options:
+    rolling_horizon: true
+    load_shedding:
+      enable: false
+  solver_options:
+    gurobi-default:
+      BarConvTol: 1.0e-08
+      FeasibilityTol: 1.0e-07
+      OptimalityTol: 1.0e-07
+      crossover: -1

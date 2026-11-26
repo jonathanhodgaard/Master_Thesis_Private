@@ -5,7 +5,7 @@ import pypsa
 import pytest
 
 from scripts.prepare_network_disruptions import (
-    add_load_shedding, add_fuel_backup_links, assert_fixed_capacities, set_weather,
+    add_load_shedding, restore_original_capacities, assert_fixed_capacities, set_weather,
 )
 
 
@@ -115,99 +115,3 @@ def test_dispatch_uses_existing_eur_solver_without_investment():
     assert status == "ok" and condition == "optimal"
     assert_fixed_capacities(n)
     assert n.generators.at["wind", "p_nom"] == 10
-
-
-def test_infeasibility_report_maps_labels_and_preserves_diagnostic_errors(tmp_path):
-    from types import SimpleNamespace
-    from unittest.mock import Mock, call
-    from scripts.solve_disruption_dispatch import write_infeasibility_report
-
-    constraints = SimpleNamespace(print_labels=lambda labels: print(f"Bus balance conflict: {labels}"))
-    model = SimpleNamespace(
-        solver_model=Mock(), constraints=constraints, to_netcdf=Mock(),
-        compute_infeasibilities=lambda: [4, 9],
-    )
-    report = tmp_path / "infeasibility.txt"
-    write_infeasibility_report(SimpleNamespace(model=model), report, time_limit=10)
-    assert "Bus balance conflict: [4, 9]" in report.read_text()
-    model.solver_model.setParam.assert_called_once_with("TimeLimit", 10)
-    assert model.solver_model.write.call_args_list == [
-        call(str(report.with_suffix(".mps"))), call(str(report.with_suffix(".ilp"))),
-    ]
-    model.to_netcdf.assert_called_once_with(report.with_suffix(".model.nc"))
-
-    model.compute_infeasibilities = Mock(side_effect=RuntimeError("IIS unavailable"))
-    write_infeasibility_report(SimpleNamespace(model=model), report)
-    assert "IIS unavailable" in report.read_text()
-
-
-@pytest.mark.parametrize("supply_capacity", [20, 5])
-def test_resized_fuel_delivery_preserves_costs_emissions_and_requires_supply(tmp_path, supply_capacity):
-    from scripts.solve_disruption_dispatch import save_fuel_backup_dispatch
-    n = pypsa.Network()
-    n.set_snapshots(pd.date_range("2013-07-01", periods=2, freq="h"))
-    n.snapshot_weightings.loc[:, :] = np.array([[1], [2]])
-    n.add("Bus", "oil", carrier="oil")
-    n.add("Bus", "transport", carrier="land transport oil", country="NO")
-    n.add("Bus", "co2", carrier="co2")
-    n.add("Store", "atmosphere", bus="co2", e_nom=100)
-    n.add("Generator", "oil source", bus="oil", p_nom=supply_capacity, marginal_cost=10)
-    n.add("Generator", "unserved travel", bus="transport", p_nom=10, marginal_cost=1000)
-    n.add("Load", "travel", bus="transport", p_set=[4, 6])
-    n.add("Link", "oil delivery", carrier="land transport oil", bus0="oil",
-          bus1="transport", bus2="co2", efficiency2=[0.2, 0.3],
-          p_nom=5, marginal_cost=[0.2, 0.3])
-    # A physical link must not be resized merely because it consumes fuel.
-    n.add("Bus", "heat", carrier="heat")
-    n.add("Link", "boiler", carrier="oil boiler", bus0="oil", bus1="heat", p_nom=2)
-    options = {"enable": True, "capacity_multiplier": 1.0, "marginal_cost_premium": 0.1}
-    add_fuel_backup_links(n, options)
-    add_fuel_backup_links(n, options)  # Refresh without adding duplicates.
-    assert n.meta["fuel_backup_links"] == {}
-    assert len(n.links) == 2
-    assert n.links.at["oil delivery", "p_nom"] == 10
-    assert n.links.at["boiler", "p_nom"] == 2
-    assert n.links.at["oil delivery", "bus2"] == "co2"
-    np.testing.assert_allclose(n.links_t.efficiency2["oil delivery"], [0.2, 0.3])
-    np.testing.assert_allclose(n.links_t.marginal_cost["oil delivery"], [0.2, 0.3])
-    assert_fixed_capacities(n)
-    status, condition = n.optimize(solver_name="highs")
-    assert status == "ok" and condition == "optimal"
-    supplied = np.array([4, min(6, supply_capacity)])
-    np.testing.assert_allclose(n.links_t.p0["oil delivery"], supplied, atol=1e-7)
-    np.testing.assert_allclose(n.generators_t.p["oil source"], supplied, atol=1e-7)
-    np.testing.assert_allclose(n.generators_t.p["unserved travel"], [0, 6 - supplied[1]], atol=1e-7)
-    np.testing.assert_allclose(n.links_t.p2["oil delivery"], -supplied * [0.2, 0.3], atol=1e-7)
-    path = tmp_path / "fuel_backup_dispatch.csv"
-    save_fuel_backup_dispatch(n, path)
-    assert pd.read_csv(path).empty  # No fictitious parallel-backup dispatch.
-    prepared = tmp_path / "prepared.nc"
-    n.export_to_netcdf(prepared)
-    loaded = pypsa.Network(prepared)
-    add_fuel_backup_links(loaded, options)
-    assert loaded.links.at["oil delivery", "p_nom"] == 10
-    add_fuel_backup_links(loaded, {"enable": False})
-    assert loaded.links.at["oil delivery", "p_nom"] == 5
-
-
-def test_fuel_backup_can_be_disabled_and_empty_report_has_headers(tmp_path):
-    from scripts.solve_disruption_dispatch import save_fuel_backup_dispatch
-    n = network(2013)
-    add_fuel_backup_links(n, {"enable": False})
-    path = tmp_path / "fuel_backup_dispatch.csv"
-    save_fuel_backup_dispatch(n, path)
-    assert pd.read_csv(path).empty
-    with pytest.raises(ValueError, match="positive"):
-        add_fuel_backup_links(n, {"enable": True, "capacity_multiplier": -1})
-
-
-def test_resizing_removes_legacy_parallel_backups():
-    n = network(2013)
-    n.add("Link", "delivery", carrier="gas for industry", bus0="electricity", bus1="heat", p_nom=3)
-    n.add("Link", "delivery fuel backup", carrier="fuel backup gas for industry",
-          bus0="electricity", bus1="heat", p_nom=3)
-    n.meta["fuel_backup_links"] = {"delivery fuel backup": {"original_link": "delivery"}}
-    add_fuel_backup_links(n, {"enable": True})
-    assert "delivery fuel backup" not in n.links.index
-    assert n.links.at["delivery", "p_nom"] == 6
-    assert n.links.at["heat pump", "p_nom"] == 2

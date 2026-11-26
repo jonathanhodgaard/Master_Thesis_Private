@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Daily electricity price in DK2 over the simulated year, one line per case.
 
@@ -73,7 +75,7 @@ def plot_lines(series, colors, widths, label, offset, spans=(), legend_title=Non
     ax.set_yscale("symlog", linthresh=LINTHRESH, linscale=0.4)
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:,.0f}"))
-    ax.set_ylabel(f"electricity price {label} (€/MWh)")
+    ax.set_ylabel(f"electricity price {label} (â‚¬/MWh)")
     ax.grid(axis="y", color="#e0e0e0", lw=0.6)
     ax.set_axisbelow(True)
     for sp in ("top", "right"):

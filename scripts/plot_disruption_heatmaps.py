@@ -1,3 +1,5 @@
+# Legacy saved-experiment plotting; for the current campaign use rules/plot_disruption.smk
+# and scripts/summarise_disruptions.py. Historical configuration versions remain in Git.
 # SPDX-License-Identifier: MIT
 """Resilience heatmaps: interconnector disruption case (rows) x weather year (columns).
 
@@ -31,7 +33,7 @@ metrics use one fixed window for every case (plotting.heatmap.window, default
                                 scarcity_price
   voll_cost_MEUR                regional load shedding x its VoLL in the window
                                 (electricity and heat shedding generators on the
-                                region's buses, their marginal cost = VoLL), M€
+                                region's buses, their marginal cost = VoLL), Mâ‚¬
   dispatch_cost_excl_shedding_MEUR  system-wide operating cost of the whole run
                                 (dispatch_summary.csv, operating_cost_EUR) minus the
                                 load-shedding cost. NaN without a summary file.
@@ -83,16 +85,16 @@ METRICS = {
                   "{:+,.2f}", "abs"),
     "price_normal": ("price_normal_EUR_per_MWh",
                      "load-weighted electricity price {label}, {window},\n"
-                     "hours below {scarcity:,.0f} €/MWh (%)", "{:+,.1f} %", "pct"),
+                     "hours below {scarcity:,.0f} â‚¬/MWh (%)", "{:+,.1f} %", "pct"),
     "shedding_hours": ("shedding_hours_power",
                        "hours with electricity load shedding in {label}, {window} (h)",
                        "{:+,.0f}", "abs"),
     "scarcity_hours_no_shedding": ("scarcity_hours_no_shedding",
-                                   "hours with electricity price {label} ≥ {scarcity:,.0f} "
-                                   "€/MWh\nbut no load shedding in {label}, {window} (h)",
+                                   "hours with electricity price {label} â‰¥ {scarcity:,.0f} "
+                                   "â‚¬/MWh\nbut no load shedding in {label}, {window} (h)",
                                    "{:+,.0f}", "abs"),
     "consumer_cost": ("consumer_cost_MEUR",
-                      "consumer cost {label}, {window}, price capped at {cap:,.0f} €/MWh\n"
+                      "consumer cost {label}, {window}, price capped at {cap:,.0f} â‚¬/MWh\n"
                       "(price x served electricity demand)", "{:+,.0f} %", "pct"),
     "consumer_cost_uncapped": ("consumer_cost_uncapped_MEUR",
                                "consumer cost {label}, {window}, model price (scarcity "
@@ -100,24 +102,24 @@ METRICS = {
                                "{:+,.0f} %", "pct"),
     "consumer_cost_normal": ("consumer_cost_normal_MEUR",
                              "consumer cost {label}, {window},\n"
-                             "hours below {scarcity:,.0f} €/MWh (M€)", "{:+,.1f}", "abs"),
+                             "hours below {scarcity:,.0f} â‚¬/MWh (Mâ‚¬)", "{:+,.1f}", "abs"),
     "consumer_cost_scarcity": ("consumer_cost_scarcity_MEUR",
                                "consumer cost {label}, {window},\n"
-                               "hours ≥ {scarcity:,.0f} €/MWh (M€)", "{:+,.1f}", "abs"),
+                               "hours â‰¥ {scarcity:,.0f} â‚¬/MWh (Mâ‚¬)", "{:+,.1f}", "abs"),
     "voll_cost": ("voll_cost_MEUR",
                   "cost of unserved energy {label}, {window}" + "\n" +
-                  "(load shedding x VoLL, electricity and heat, M€)", "{:+,.0f} M€", "abs"),
+                  "(load shedding x VoLL, electricity and heat, Mâ‚¬)", "{:+,.0f} Mâ‚¬", "abs"),
     "dispatch_cost": ("dispatch_cost_excl_shedding_MEUR",
-                      "system dispatch cost excl. load shedding,\nwhole run (M€)",
+                      "system dispatch cost excl. load shedding,\nwhole run (Mâ‚¬)",
                       "{:+,.0f}", "abs"),
 }
 NOT_SOLVED = "#d9d9d9"
 # number format of the second cell line (same-year base -> case); default "{:,.0f}"
 SUB_FORMAT = {"ens_power": "{:,.2f}"}
 # unit of the second cell line for % metrics (base -> case); default EUR/MWh
-SUB_UNIT = {"consumer_cost": "M€", "consumer_cost_uncapped": "M€"}
-# unit written after the second cell line (base -> case), e.g. "0 → 1,409 M€"
-SUB_SUFFIX = {"voll_cost": " M€"}
+SUB_UNIT = {"consumer_cost": "Mâ‚¬", "consumer_cost_uncapped": "Mâ‚¬"}
+# unit written after the second cell line (base -> case), e.g. "0 â†’ 1,409 Mâ‚¬"
+SUB_SUFFIX = {"voll_cost": " Mâ‚¬"}
 
 
 # ---- per-case metrics --------------------------------------------------------------
@@ -322,7 +324,7 @@ def heatmap(grid, cbar_label, fmt, mark=None, sub=None):
 
 def window_label(window):
     start, end = (pd.Timestamp(t) for t in window)
-    return f"{start.day} {start:%b} – {end.day} {end:%b}"
+    return f"{start.day} {start:%b} â€“ {end.day} {end:%b}"
 
 
 def plot_all(files, years, cases, labels, reference_year, reference_case, region_label,
@@ -364,13 +366,13 @@ def plot_all(files, years, cases, labels, reference_year, reference_case, region
             level_fmt = SUB_FORMAT.get(key, "{:,.0f}")
             suffix = SUB_SUFFIX.get(key, "")
             sub = level.reindex(index=rows_b).apply(
-                lambda col: [f"{level_fmt.format(base[col.name])} → {level_fmt.format(v)}{suffix}"
+                lambda col: [f"{level_fmt.format(base[col.name])} â†’ {level_fmt.format(v)}{suffix}"
                              if base is not None and np.isfinite(base[col.name])
                              and np.isfinite(v) else None for v in col])
             grid.index = [labels.get(c, c) for c in grid.index]
-            what = "change" if change == "pct" else "Δ"
-            unit = (f"\ncell: change (%), and base → case ({SUB_UNIT.get(key, '€/MWh')})" if change == "pct"
-                    else "\ncell: change, and base → case")
+            what = "change" if change == "pct" else "Î”"
+            unit = (f"\ncell: change (%), and base â†’ case ({SUB_UNIT.get(key, 'â‚¬/MWh')})" if change == "pct"
+                    else "\ncell: change, and base â†’ case")
             fig = heatmap(grid, f"{what} {label.format(**fill)}\n{vs_text}{unit}", fmt,
                           mark=mark, sub=sub)
             path = outputs.get(f"{key}_{baseline}") or (

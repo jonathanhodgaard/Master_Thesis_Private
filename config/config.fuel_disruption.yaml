@@ -1,0 +1,11 @@
+# DK2 consuming equipment: p_max_pu *= (1 - reduction), during the event only.
+disruption:
+  campaign: fuel
+  fuels:
+  - oil
+  - gas
+  - biomass
+  reductions:
+  - 0.33
+  - 0.66
+  - 1.0

@@ -13,60 +13,33 @@ CAPACITIES = {
     "Store": "e_nom", "Line": "s_nom", "Transformer": "s_nom",
 }
 
-FUEL_ACCOUNTING_END_USES = {
-    "land transport oil": "land transport",
-    "gas for industry": "industry",
-    "coal for industry": "industry",
-    "solid biomass for industry": "industry",
-    "industry methanol": "industry",
-    "kerosene for aviation": "aviation",
-    "shipping oil": "shipping",
-    "shipping methanol": "shipping",
-    "agriculture machinery oil": "agriculture machinery",
-}
-
-
-def add_fuel_backup_links(n, options):
-    """Resize original accounting links; retain the legacy API/config name.
-
-    capacity_multiplier specifies additional capacity relative to the original,
-    as it did for parallel backups: 1.0 now doubles the original link directly.
-    No backup link or marginal-cost premium is added.
-    """
+def restore_original_capacities(n):
+    """Remove recorded legacy delivery/distribution expansions before freezing."""
     for name, info in n.meta.get("fuel_delivery_capacity_adjustments", {}).items():
-        if name in n.links.index:
-            for attr, value in info["original_capacities"].items():
-                n.links.at[name, attr] = value
+        if name not in n.links.index:
+            raise ValueError(f"Missing previously adjusted Link {name}.")
+        for attr, value in info["original_capacities"].items():
+            n.links.at[name, attr] = value
     old = list(n.meta.get("fuel_backup_links", {}))
     n.remove("Link", n.links.index.intersection(old))
-    n.meta = {**n.meta, "fuel_backup_links": {}, "fuel_delivery_capacity_adjustments": {}}
-    if not options.get("enable", False):
-        return
-    multiplier = float(options.get("capacity_multiplier", 1.0))
-    if not np.isfinite(multiplier) or multiplier <= 0:
-        raise ValueError("Additional fuel-delivery capacity multiplier must be positive and finite.")
+    for info in n.meta.get("low_voltage_capacity_adjustments", []):
+        name = info["link"]
+        if name not in n.links.index:
+            raise ValueError(f"Missing previously adjusted distribution Link {name}.")
+        value = info["original_input_capacity_MW"]
+        n.links.loc[name, ["p_nom", "p_nom_opt", "p_nom_min", "p_nom_max"]] = value
+    for key in ("fuel_backup_links", "fuel_delivery_capacity_adjustments", "low_voltage_capacity_adjustments"):
+        n.meta.pop(key, None)
 
-    carriers = options.get("carriers", list(FUEL_ACCOUNTING_END_USES))
-    originals = n.links.index[n.links.carrier.isin(carriers)]
-    metadata = {}
-    for original in originals:
-        row = n.links.loc[original]
-        if not np.isfinite(row.p_nom) or row.p_nom < 0:
-            raise ValueError(f"Invalid fixed fuel-delivery capacity: {original}")
-        if row.p_nom == 0:
-            continue
-        if row.p_nom_extendable:
-            raise ValueError(f"Fuel-delivery capacity must be fixed before resizing: {original}")
-        attrs = [attr for attr in ("p_nom", "p_nom_opt", "p_nom_min", "p_nom_max")
-                 if attr in n.links.columns]
-        capacities = {attr: float(row[attr]) for attr in attrs}
-        for attr, value in capacities.items():
-            n.links.at[original, attr] = value * (1 + multiplier)
-        metadata[original] = {
-            "original_capacities": capacities,
-            "capacity_multiplier": 1 + multiplier,
-        }
-    n.meta = {**n.meta, "fuel_delivery_capacity_adjustments": metadata}
+
+def set_biomass_import_capacity(n, capacity):
+    """Fix each external biomass delivery Link at the common input MW rating."""
+    names = n.links.index[n.links.carrier.eq("solid biomass import")]
+    if names.empty or not np.isfinite(capacity) or capacity <= 0:
+        raise ValueError("Expected biomass import Links and a positive finite MW rating.")
+    n.links.loc[names, ["p_nom", "p_nom_opt", "p_nom_min", "p_nom_max"]] = float(capacity)
+    n.links.loc[names, "p_nom_extendable"] = False
+    n.meta["biomass_import_capacity_MW"] = float(capacity)
 
 
 def assert_fixed_capacities(n):
@@ -74,42 +47,6 @@ def assert_fixed_capacities(n):
         table = n.components[component].static
         if table[attr + "_extendable"].any():
             raise ValueError(f"Dispatch must not contain extendable {component} assets.")
-
-
-def apply_low_voltage_capacity_multipliers(n, multipliers):
-    """Scale fixed distribution links by country, including reverse-direction links."""
-    if not multipliers:
-        return
-    if not isinstance(multipliers, dict):
-        raise ValueError("Low-voltage capacity multipliers must be a country-to-factor mapping.")
-    if "low_voltage_capacity_adjustments" in n.meta:
-        raise ValueError("Low-voltage capacity multipliers have already been applied.")
-    records = []
-    links = n.links.loc[n.links.carrier.eq("electricity distribution grid")]
-    for country, factor in multipliers.items():
-        if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not np.isfinite(factor) or factor <= 0:
-            raise ValueError("Low-voltage capacity multipliers must be positive finite numbers.")
-        selected = []
-        for name, row in links.iterrows():
-            endpoints = n.buses.loc[[row.bus0, row.bus1]]
-            if set(endpoints.carrier) != {"AC", "low voltage"}:
-                continue
-            low_voltage = endpoints.loc[endpoints.carrier.eq("low voltage")].iloc[0]
-            if low_voltage.get("country", "") == country:
-                selected.append(name)
-        if not selected:
-            raise ValueError(f"No low-voltage distribution links found for country {country!r}.")
-        for name in selected:
-            original = float(n.links.at[name, "p_nom"])
-            if n.links.at[name, "p_nom_extendable"] or not np.isfinite(original) or original < 0:
-                raise ValueError(f"Freeze finite distribution capacities before scaling {name}.")
-            records.append({"link": name, "country": country, "multiplier": float(factor),
-                            "original_input_capacity_MW": original,
-                            "input_capacity_MW": original * factor})
-    # Validate every selection before changing any capacity.
-    for record in records:
-        n.links.loc[record["link"], ["p_nom", "p_nom_opt", "p_nom_min", "p_nom_max"]] = record["input_capacity_MW"]
-    n.meta = {**n.meta, "low_voltage_capacity_adjustments": records}
 
 
 def set_weather(n, weather):
@@ -263,6 +200,7 @@ def add_load_shedding(
 if __name__ == "__main__":
     n = pypsa.Network(snakemake.input.net)
 
+    restore_original_capacities(n)
     shares = snakemake.input.get("household_shares", [])
     if META_KEY in n.meta:
         if not shares:
@@ -275,15 +213,12 @@ if __name__ == "__main__":
     if weather_file:
         set_weather(n, pypsa.Network(weather_file))
 
-    apply_low_voltage_capacity_multipliers(
-        n, snakemake.params.get("low_voltage_capacity_multipliers", {}),
-    )
+    set_biomass_import_capacity(n, snakemake.params.biomass_import_capacity_MW)
 
     if snakemake.params.get("rolling_horizon", False):
         from scripts.disruption_waste_hvc import prepare_waste_hvc
         prepare_waste_hvc(n, snakemake.params.rolling.get("waste_hvc", {}))
 
-    add_fuel_backup_links(n, dict(snakemake.params.fuel_backup))
     # Refresh accounting sinks after freezing capacities and transferring weather.
     # Also repairs old references whose optimized vent size reflected baseline use.
     prepare_dispatch_heat_vent_capacity(n, snakemake.params.get("heat_vent", {}))
@@ -293,6 +228,7 @@ if __name__ == "__main__":
         "base_network": str(snakemake.input.net),
         "weather_network": str(weather_file) if weather_file else None,
         "dispatch_only": True,
+        "policy": dict(snakemake.params.policy),
     }}
     Path(snakemake.output.net).parent.mkdir(parents=True, exist_ok=True)
     n.export_to_netcdf(snakemake.output.net)
