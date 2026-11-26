@@ -1,10 +1,14 @@
 # Load after the 2025 fuel-use campaign and its four-week winter overlay.
-# Keep the same events, rolling assumptions and current hydrogen slack.
+# Separate 50000 EUR/MWh process-H2 sensitivity; original h2_test outputs retained.
 disruption:
   base_network: results/sector_2035_wo_V2G/networks/base_s_10___2035.nc
   household_shares: results/sector_2035_wo_V2G/csvs/household_heat_shares_base_s_10___2035.csv
   planning_horizon: 2035
-  output_directory: results/disruptions/sector_2035_wo_V2G_fuel_use_winter_1965_66_h2_test
+  output_directory: results/disruptions/sector_2035_wo_V2G_fuel_use_winter_1965_66_h2_50000_test
+  load_shedding:
+    fuel:
+      hydrogen_balance:
+        cost: 50000
   default_weather_year: 1965-1966
   weather_years:
     2013-2014:

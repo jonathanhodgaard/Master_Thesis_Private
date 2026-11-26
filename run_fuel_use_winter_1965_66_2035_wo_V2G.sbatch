@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=fuel_h2_2035_wo_V2G_6566
+#SBATCH --job-name=fuel_h2_50k_2035_wo_V2G_6566
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -21,7 +21,8 @@ export TMPDIR="$task_tmp_dir" TMP="$task_tmp_dir" TEMP="$task_tmp_dir"
 
 # 1965/66 weather, Jan 1-29 model calendar; event Jan 8-22 (end-exclusive).
 # Seven independent cases: control, gas 50/75/90%, oil 50/75/90% reductions.
-# Retains current penalised H2 process supply; does not change production minima.
+# Process H2 penalty: 50000 EUR/MWh; separate h2_50000_test output directory.
+# Final-demand shedding prices and production minima retain their existing settings.
 # Preflight: bash this_file.sbatch --list (or --check-inputs).
 # Keep years/cases fixed to match array 0-6; extra args pass to the runner.
 python -m scripts.run_disruption_campaign \

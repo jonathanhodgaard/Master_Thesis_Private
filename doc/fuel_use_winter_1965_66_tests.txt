@@ -38,8 +38,12 @@ inputs throughout. The preflight reports missing files; these scripts do not
 build base networks or donors. Do not change --years/--cases without adjusting
 the array indices. Extra arguments are passed to the campaign runner.
 
-These runs inspect the CURRENT hydrogen treatment. Penalised artificial H2
-for process consumption remains enabled at 23300 EUR/MWh; synthesis minimum
+These runs test a higher process-hydrogen penalty. Final hydrogen/fuel demand
+shedding retains its common 23300 EUR/MWh penalty. Earlier results remain in
+the original *_1965_66_h2_test/ roots and are not overwritten.
+
+These runs retain the current hydrogen mechanism. Penalised artificial H2
+for process consumption remains enabled at 50000 EUR/MWh; synthesis minimum
 outputs are preserved. They do not implement production curtailment or a
 gas/biomass-dependent eligibility restriction. No biomass disruption is added.
 Final hydrogen/fuel demand shedding is reported separately from process H2.
@@ -49,8 +53,8 @@ pre-January resource usage, not a continuous July-January historical dispatch.
 They are screening tests rather than full-year resilience results.
 
 Separate output roots, each followed by 1965-1966/<case>/:
-  results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_test/
-  results/disruptions/sector_2035_wo_V2G_fuel_use_winter_1965_66_h2_test/
+  results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_50000_test/
+  results/disruptions/sector_2035_wo_V2G_fuel_use_winter_1965_66_h2_50000_test/
 
 Compare each disruption with its own same-year control. Inspect:
   hydrogen_shedding_by_bus.csv and hydrogen_shedding_timeseries.csv:

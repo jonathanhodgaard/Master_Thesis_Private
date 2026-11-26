@@ -1,4 +1,8 @@
 # Load after the fuel-use campaign and its four-week winter overlay.
-# Isolated outputs for the 1965/66 hydrogen diagnostic; current H2 slack retained.
+# Separate 50000 EUR/MWh process-H2 sensitivity; original h2_test outputs retained.
 disruption:
-  output_directory: results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_test
+  output_directory: results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_50000_test
+  load_shedding:
+    fuel:
+      hydrogen_balance:
+        cost: 50000
