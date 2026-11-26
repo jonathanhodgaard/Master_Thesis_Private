@@ -1,0 +1,55 @@
+December-March gas-90% tests: 2025 and 2035 without V2G
+====================================================
+
+Four independent runs: two planning systems x two weather years. No control,
+oil or biomass disruption cases are selected by these scripts.
+
+Weather periods:
+  Task 0: December 1, 1965 through March 31, 1966.
+  Task 1: December 1, 1968 through March 31, 1969.
+Both use the model calendar December 1, 2013 to April 1, 2014 (end-exclusive),
+2904 implemented hours each. Gas consuming-Link maximum availability is reduced
+by 90% throughout the entire simulation. This includes gas-fired generation,
+boilers, CHP, industrial delivery and SMR; upstream supply/pipelines are not
+directly derated. Alternative upstream gas cannot bypass restricted uses.
+
+Process hydrogen penalty: 200000 EUR/MWh. Final fuel-demand shedding remains
+23300 EUR/MWh. Existing synthesis minima remain. Artificial hydrogen is still
+allowed; the price does not enforce full electrolysis utilisation first.
+Rolling horizon 168 hours, overlap 48 hours. Start from reference predecessor
+storage inventories and reference pre-December resource usage, rather than
+simulating July-November under the historical weather. July-only inventory
+overrides are cleared. All cases use separate new result directories.
+
+Copy both new .sbatch files and both config/config.fuel_use_dec_mar_*.yaml
+files into the existing Sophia repository. They depend on the current campaign
+scripts and config/config.fuel_use_disruption_2025.yaml already installed.
+
+From the repository root on Sophia:
+  source /home/s203684/miniforge3/etc/profile.d/conda.sh
+  conda activate "$PWD/.conda-env"
+  mkdir -p logs
+
+Check task mapping and existing base/donor inputs (no job submission):
+  bash run_fuel_use_dec_mar_2025.sbatch --list
+  bash run_fuel_use_dec_mar_2025.sbatch --check-inputs
+  bash run_fuel_use_dec_mar_2035_wo_V2G.sbatch --list
+  bash run_fuel_use_dec_mar_2035_wo_V2G.sbatch --check-inputs
+
+Submit:
+  sbatch run_fuel_use_dec_mar_2025.sbatch
+  sbatch run_fuel_use_dec_mar_2035_wo_V2G.sbatch
+
+Each array has two tasks and allows both to run concurrently; four nodes total
+if both arrays run together. Each task requests the existing 12-hour wall time.
+The scripts do not build missing base networks or weather donors.
+
+Output roots, followed by <weather-year>/gas_reduction_90/:
+  results/disruptions/sector_2025_fuel_use_dec_mar_gas90_h2_200000_test/
+  results/disruptions/sector_2035_wo_V2G_fuel_use_dec_mar_gas90_h2_200000_test/
+
+Existing January and lower-penalty results remain separate. Eastern Denmark
+(geographical DK2) is model node DK0 0AC. Use hydrogen_shedding_by_bus.csv,
+hydrogen_shedding_timeseries.csv, fuel_shedding_by_demand.csv and the solved
+network for diagnosis. These runs cover a longer disruption than the original
+two-week January event, so their total shortfalls are not directly comparable.
