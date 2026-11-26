@@ -1,8 +1,8 @@
 # Load after the fuel-use campaign and its four-week winter overlay.
-# Separate 50000 EUR/MWh process-H2 sensitivity; original h2_test outputs retained.
+# Separate 200000 EUR/MWh process-H2 sensitivity; previous h2_test and h2_50000_test outputs retained.
 disruption:
-  output_directory: results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_50000_test
+  output_directory: results/disruptions/sector_2025_fuel_use_winter_1965_66_h2_200000_test
   load_shedding:
     fuel:
       hydrogen_balance:
-        cost: 50000
+        cost: 200000
