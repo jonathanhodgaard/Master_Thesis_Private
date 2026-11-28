@@ -37,7 +37,10 @@ rule build_powerplants:
         network=resources("networks/base_s_{clusters}.nc"),
         regions_onshore=resources("regions_onshore_base_s_{clusters}.geojson"),
         regions_offshore=resources("regions_offshore_base_s_{clusters}.geojson"),
-        powerplants=rules.retrieve_powerplants.output["powerplants"],
+        powerplants=lambda w: (
+            config_provider("electricity", "prepared_powerplants", default=None)(w)
+            or rules.retrieve_powerplants.output["powerplants"]
+        ),
         custom_powerplants="data/custom_powerplants.csv",
     output:
         resources("powerplants_s_{clusters}.csv"),

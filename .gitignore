@@ -98,3 +98,10 @@ doc/img/intro-workflow.svg
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# Pinned Danish capacity-preparation source snapshots (including the JRC workbook).
+!/data/danish_capacity_sources/
+!/data/danish_capacity_sources/*.csv
+!/data/danish_capacity_sources/JRC-IDEES-2023_Residential_DK.xlsx
+!/data/danish_capacity_sources/README.md
+!/data/danish_capacity_sources/manifest.json

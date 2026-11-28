@@ -1,5 +1,9 @@
 # Disruption campaign
 
+First complete [source preparation and infrastructure references](preparation_workflow.md).
+Danish capacity preparation, full-year co-optimised reference solves and weather
+donor preparation precede this fixed-capacity rolling campaign.
+
 The active campaign has three network variants (2025, 2035 without V2G, 2035 with
 V2G), five weather years, and durations of 1, 24, 168, 720 and 2160 hours. It uses
 15 no-disruption baselines, 525 interconnector disruptions, and 675 fuel-use
@@ -21,7 +25,7 @@ interconnectors or fuels. The shared runner selects this stack automatically.
 
 Infrastructure is frozen from the matching solved investment network, across
 weather years. Weather donors transfer operating inputs only and retain the
-reference model calendar (July 2013â€“June 2014). All external `solid biomass import`
+reference model calendar (July 2013Ã¢â‚¬â€œJune 2014). All external `solid biomass import`
 Links are fixed at 50,000 MW each. The annual import allowance is independent
 and unchanged. Heat vents are sized from connected heat inputs. All remaining
 infrastructure capacities, including Finnish/Swedish distribution links, stay
@@ -50,21 +54,72 @@ reference path is recorded in each `run_info.json`.
 
 ## Event timing
 
-After each rolling baseline, analyse DK2 hourly electricity consumption minus
-available wind/solar. Consumption includes fixed electricity Loads, electrical
-conversion inputs (heat pumps, EV charging, electrolysers, etc.) and charging.
-Electricity transfers, including internal distribution, are not counted again.
-Renewable availability uses frozen `p_nom * p_max_pu`, including rooftop solar,
-before curtailment; dispatchable biomass is not part of this renewable term.
+Each solved rolling baseline produces two independently selected sets of DK2
+windows. Both use available wind/solar electricity before curtailment:
 
-For each duration, scan every hourly starting point and maximise the signed
-sum of residual load (MWh). Surplus hours remain negative. Only complete windows
-inside the year are eligible; there is no wrapping. The first maximum wins ties.
-Each duration is selected independently. Both campaigns use those same windows.
-Baseline conversion/charging demand can respond differently during disruptions;
-event dates remain fixed from the undisrupted baseline.
-`event_windows.csv` stores model-calendar start inclusive/end exclusive plus the
-weather-year identity; dates are not historical-weather timestamps.
+| Campaign | Hourly timing score |
+| --- | --- |
+| Interconnector outages | Total electricity consumption - available wind/solar |
+| Fuel disruptions | Useful heat demand - available wind/solar |
+
+Electrical consumption includes fixed electricity Loads, heating electricity
+(heat pumps, electric boilers and heating auxiliaries), other conversion inputs
+(EV charging, electrolysis, etc.) and electrical charging. Ordinary/reverse-flow
+heat pumps are included. Electricity transfers such as internal distribution and
+interconnectors are not counted again. Heating electricity is **not subtracted**
+from the interconnector criterion: it contributes to electrical import dependence.
+The two criteria are evaluated separately, never added together.
+
+Useful heat demand is the sum of final Loads at DK2 heat buses: district,
+rural/decentral, industry and agriculture where connected to those buses. Count
+the original household heat Load once, without adding its technology-specific
+delivery Links. Thermal storage flows, production losses, vents and shedding are
+not additional final heat demand. Requested heat is counted even if some is shed.
+
+The fuel criterion is explicitly a **high-heat-demand/low-wind-and-solar proxy**,
+not a physical heat deficit or a measure of fuel consumption. Wind/solar are
+still measured as available electricity; no conversion using COP/boiler efficiency
+is applied. All oil/gas/biomass reductions use the fuel campaign's heating windows.
+Biomass, solar thermal and other heat sources are not subtracted from either score.
+
+Renewable availability uses frozen `p_nom * p_max_pu`, including rooftop solar.
+For each campaign and duration, scan every hourly starting point and maximise
+the signed cumulative score. Keep negative surplus hours; consider only complete
+windows within the year, without wrapping. The first maximum wins ties. Durations
+are 1, 24, 168, 720 and 2160 hours, selected independently for each criterion.
+The same-duration electrical and heating windows can have different dates.
+Baseline demand can respond differently during disruptions; dates stay fixed
+from the undisrupted baseline.
+
+`residual_load_hourly.csv` records `electrical_residual_load_MW` and
+`heat_stress_MW`, plus gross electricity, electricity used for heat, electricity
+excluding heat, useful heat demand and available wind/solar. The heating-related
+electricity breakdown is diagnostic only; the interconnector score uses the full
+electrical total.
+
+`event_windows.csv` contains **10 rows per variant/weather pair**: five per
+campaign, identified by `campaign` and a distinct `timing_metric`. Across the 15
+baselines this gives 150 candidate windows. It records selected component energies
+and `residual_energy_MWh` (the cumulative score for that row's criterion). Dates
+use the model calendar, with inclusive start/exclusive end and weather-year identity.
+Application, task plans and campaign summaries select by campaign and duration;
+obsolete combined/untagged tables cannot silently supply event dates. Summaries
+also reject solved scenarios whose recorded criterion/dates differ from the
+selected windows.
+
+Regenerate the timing tables from existing solved rolling baselines before
+submitting either campaign. This timing change alone requires no capacity change
+or baseline optimisation. For example:
+
+```bash
+snakemake analyse_disruption_windows --cores 1 --allowed-rules analyse_disruption_windows --configfiles config/config.sector_2025.yaml config/config.disruption_common.yaml --config disruption_variant=2025 disruption_weather_year=2013-2014
+```
+
+Repeat for each existing variant/weather baseline. This command produces both
+sets of windows and cannot schedule a baseline solve. Saved results are not
+modified by the code change itself. Disrupted scenarios using previous timing
+must be rerun or retained separately as historical experiments before making
+comparisons under the new criteria.
 
 Fuel disruptions scale the normal `Link.p_max_pu` by `1 - reduction` only within
 that interval. Input capacities and efficiencies remain unchanged. Selection is

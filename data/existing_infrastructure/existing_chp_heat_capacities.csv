@@ -1,14 +1,4 @@
 node,carrier,set,power_capacity,heating_capacity
-DK2,ac,resistive heater,,481.997
-DK2,air,heat pump,,169.301
-DK2,gas,CHP,244.519,409.06
-DK2,gas,boiler,0.0,1965.307
-DK2,oil,boiler,0.0,958.93
-DK2,solar thermal,solar thermal,,181.805
-DK2,solid biomass,CHP,1168.7480000000003,2001.106
-DK2,solid biomass,boiler,0.0,557.121
-DK2,waste,CHP,169.09,536.7
-DK2,waste,boiler,0.0,15.5
 DK1,ac,resistive heater,,1560.098
 DK1,air,heat pump,,626.425
 DK1,coal,CHP,385.0,422.0
@@ -21,3 +11,13 @@ DK1,solid biomass,CHP,804.6830000000001,1656.7269999999999
 DK1,solid biomass,boiler,0.0,1489.935
 DK1,waste,CHP,219.0,640.77
 DK1,waste,boiler,0.0,76.5
+DK2,ac,resistive heater,,481.997
+DK2,air,heat pump,,169.301
+DK2,gas,CHP,244.519,409.06
+DK2,gas,boiler,0.0,1965.307
+DK2,oil,boiler,0.0,958.93
+DK2,solar thermal,solar thermal,,181.805
+DK2,solid biomass,CHP,1168.7480000000003,2001.106
+DK2,solid biomass,boiler,0.0,557.121
+DK2,waste,CHP,169.09,536.7
+DK2,waste,boiler,0.0,15.5

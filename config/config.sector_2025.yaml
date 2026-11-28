@@ -33,6 +33,7 @@ biomass:
   export_budget_duals: true
 
 electricity:
+  prepared_powerplants: data/existing_infrastructure/powerplants.csv
   extendable_carriers:
     Generator: []
     StorageUnit: []
@@ -198,7 +199,7 @@ industry:
 
 costs:
   year: 2025
-  emission_prices: #Undersøg også "dynamic" funktionen
+  emission_prices: #UndersÃ¸g ogsÃ¥ "dynamic" funktionen
     enable: true
     co2: 100.51 #DK price in 2025
     #https://taxfoundation.org/data/all/eu/carbon-taxes-europe/

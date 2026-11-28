@@ -82,6 +82,7 @@ if DISRUPTION["campaign"] != "baseline":
             report=DISRUPTION_DIR + "/{case}/applied_disruption.csv",
         params:
             definition=lambda w: DISRUPTION["cases"][w.case],
+            campaign=DISRUPTION["campaign"],
             variant=DISRUPTION["selected_variant"],
             weather_year=DISRUPTION["selected_weather_year"],
         script:

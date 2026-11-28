@@ -47,4 +47,4 @@ for year in 1965_66 1968_69 1988_89 2019_20; do
     "$@"
 done
 
-python -m scripts.run_disruption_campaign --check-inputs
+python -m scripts.run_disruption_campaign --campaign baseline --variant 2025 --sophia --check-inputs

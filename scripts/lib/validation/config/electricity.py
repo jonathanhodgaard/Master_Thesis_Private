@@ -207,6 +207,10 @@ class ElectricityConfig(BaseModel):
         default_factory=_ExtendableCarriersConfig,
         description="Defines which carriers are extendable during optimization.",
     )
+    prepared_powerplants: str | None = Field(
+        None,
+        description="Optional prepared powerplant CSV replacing the retrieved database as build_powerplants input. Null preserves the standard retrieval workflow.",
+    )
     powerplants_filter: str | bool = Field(
         "(DateOut > 2025 or DateOut != DateOut) and (DateIn < 2026 or DateIn != DateIn)",
         description="Filter query for the default powerplant database.",

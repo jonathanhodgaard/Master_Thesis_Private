@@ -33,6 +33,7 @@ biomass:
   export_budget_duals: true
 
 electricity:
+  prepared_powerplants: data/existing_infrastructure/powerplants.csv
   estimate_battery_capacities: true
   transmission_limit: v1.0
 

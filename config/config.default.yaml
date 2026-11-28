@@ -148,6 +148,7 @@ electricity:
     - battery
     - H2
     Link: []
+  prepared_powerplants: null # Optional locally prepared table; null uses standard retrieval.
   powerplants_filter: "(DateOut > 2025 or DateOut != DateOut) and (DateIn < 2026 or DateIn != DateIn)"
   custom_powerplants: false
   everywhere_powerplants: []

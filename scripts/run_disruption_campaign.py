@@ -12,6 +12,7 @@ import sys
 import yaml
 
 from scripts.disruption_scenarios import select_disruption, common_policy
+from scripts.analyse_disruption_windows import TIMING_METRICS, select_campaign_windows
 
 YEARS = ["2013-2014", "1965-1966", "1968-1969", "1988-1989", "2019-2020"]
 VARIANTS = ["2025", "2035_wo_V2G", "2035_w_V2G"]
@@ -104,10 +105,10 @@ def check_inputs(tasks):
             raise ValueError(f"Event windows are stale: {timing}. Rerun baseline timing analysis first.")
         with timing.open(newline="", encoding="utf-8-sig") as stream:
             rows = list(csv.DictReader(stream))
-        if (len(rows) != len(s["durations_hours"])
-                or {int(row["duration_hours"]) for row in rows} != set(s["durations_hours"])
-                or any(row["variant"] != task["variant"] or row["weather_year"] != task["year"] for row in rows)):
-            raise ValueError(f"Event window identity/durations differ from campaign: {timing}.")
+        select_campaign_windows(rows, s["campaign"], s["durations_hours"])
+        if any(row["variant"] != task["variant"] or row["weather_year"] != task["year"] for row in rows):
+            raise ValueError(f"Event window identity differs from campaign: {timing}.")
+
 
 
 
@@ -129,11 +130,14 @@ def plan_rows(tasks):
         timing = Path(task["settings"]["baseline_directory"]) / "event_windows.csv"
         if hours and timing.exists():
             with timing.open(newline="", encoding="utf-8-sig") as stream:
-                matches = [row for row in csv.DictReader(stream) if int(row["duration_hours"]) == hours]
+                selected = select_campaign_windows(list(csv.DictReader(stream)), task["settings"]["campaign"])
+                matches = selected.loc[selected.duration_hours.eq(hours)].to_dict("records")
             if len(matches) != 1:
                 raise ValueError(f"Missing or duplicate duration {hours} in {timing}.")
             start, end = matches[0]["start"], matches[0]["end"]
-        yield {"task_index": index, "variant": task["variant"], "weather_year": task["year"],
+        yield {"task_index": index, "campaign": task["settings"]["campaign"],
+               "timing_metric": TIMING_METRICS.get(task["settings"]["campaign"], ""),
+               "variant": task["variant"], "weather_year": task["year"],
                "case": task["case"], "duration_hours": hours, "start": start, "end": end,
                "baseline": f"{task['settings']['baseline_directory']}/base_weather/network_solved.nc",
                "target": task["target"]}

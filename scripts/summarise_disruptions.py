@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from scripts.analyse_disruption_windows import TIMING_METRICS, select_campaign_windows
+
 
 def metrics(n, region, start, end, noise=0.1):
     from scripts.outage_helpers import missing_demand, region_balance
@@ -52,13 +54,20 @@ def campaign_metrics(settings):
             baseline_dir = root / "base_cases" / variant / year
             baseline = pypsa.Network(baseline_dir / "base_weather/network_solved.nc")
             base_summary = pd.read_csv(baseline_dir / "base_weather/dispatch_summary.csv").iloc[0]
-            windows = pd.read_csv(baseline_dir / "event_windows.csv").set_index("duration_hours")
+            windows = select_campaign_windows(
+                pd.read_csv(baseline_dir / "event_windows.csv"), campaign, settings["durations_hours"]
+            ).set_index("duration_hours")
             cache = {}
             for case, definition in cases.items():
                 directory = root / campaign / variant / year / case
                 n = pypsa.Network(directory / "network_solved.nc")
                 summary = pd.read_csv(directory / "dispatch_summary.csv").iloc[0]
                 window = windows.loc[definition["duration_hours"]]
+                event = n.meta.get("disruption_event", {})
+                if (event.get("campaign") != campaign or event.get("timing_metric") != TIMING_METRICS[campaign]
+                        or pd.Timestamp(event.get("start")) != pd.Timestamp(window.start)
+                        or pd.Timestamp(event.get("end")) != pd.Timestamp(window.end)):
+                    raise ValueError(f"Solved scenario uses obsolete/different event timing: {directory}.")
                 for period, start, end in (("event", window.start, window.end),
                                            ("year", n.snapshots[0], n.snapshots[-1] + pd.Timedelta(hours=1))):
                     key = (str(start), str(end))
@@ -70,7 +79,7 @@ def campaign_metrics(settings):
                         for name in ("operating_cost_EUR", "net_emissions_tCO2"):
                             values[f"system_{name}"] = float(summary[name])
                             base_values[f"system_{name}"] = float(base_summary[name])
-                    row = {"variant": variant, "weather_year": year, "case": case,
+                    row = {"campaign": campaign, "timing_metric": TIMING_METRICS[campaign], "variant": variant, "weather_year": year, "case": case,
                            "duration_hours": definition["duration_hours"], "period": period,
                            "start": start, "end": end, **values}
                     for name, value in values.items():

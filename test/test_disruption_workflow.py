@@ -6,11 +6,12 @@ import runpy
 import numpy as np
 import pandas as pd
 import pypsa
+import pytest
 
 from scripts.disruption_scenarios import select_disruption, common_policy
 from scripts.run_disruption_campaign import load_config, configfiles
 from scripts.solve_disruption_dispatch import run
-from scripts.analyse_disruption_windows import residual_load, select_windows
+from scripts.analyse_disruption_windows import residual_load, select_campaign_windows, TIMING_METRICS
 from scripts.apply_disruption import apply_scenario
 from scripts.summarise_disruptions import metrics, plot_metrics
 
@@ -39,7 +40,9 @@ def test_prepare_baseline_timing_fuel_solve_and_plots(tmp_path, monkeypatch):
                          ('import','solid biomass import'),('biomass','solid biomass')]:
         n.add('Bus',name,carrier=carrier,location='DK0 0AC',country='DK')
     n.add('Load','power',bus='DK0 0AC',p_set=[2,5,4,3,6,2])
-    n.add('Load','heat',bus='heat',p_set=1)
+    n.add('Load','heat',bus='heat',p_set=[1,1,1,1,1,5])
+    n.add('Bus','SE0 0AC',carrier='AC',location='SE0 0AC',country='SE')
+    n.add('Link','cable',bus0='SE0 0AC',bus1='DK0 0AC',carrier='DC',p_nom=2)
     n.add('Generator','gas supply',bus='gas',carrier='gas',p_nom=30,marginal_cost=10)
     n.add('Generator','solar',bus='DK0 0AC',carrier='solar',p_nom=2,p_max_pu=[0,.1,.7,.1,0,0])
     n.add('Link','CCGT',bus0='gas',bus1='DK0 0AC',carrier='CCGT',p_nom=20,efficiency=.5)
@@ -85,22 +88,38 @@ def test_prepare_baseline_timing_fuel_solve_and_plots(tmp_path, monkeypatch):
                                 variant='2025',weather_year='2013-2014'))
     runpy.run_path(str(root/'scripts/analyse_disruption_windows.py'),run_name='__main__',init_globals={'snakemake':timing})
     windows=pd.read_csv(tmp_path/'events.csv',parse_dates=['start','end'])
+    assert len(windows)==4
+    assert set(windows.timing_metric)==set(TIMING_METRICS.values())
+    heating=select_campaign_windows(windows,'fuel',[1,2])
+    electric=select_campaign_windows(windows,'interconnector',[1,2])
+    np.testing.assert_allclose(heating.residual_energy_MWh,
+        heating.heat_demand_MWh - heating.renewable_available_MWh)
+    np.testing.assert_allclose(electric.residual_energy_MWh,
+        electric.electricity_total_MWh - electric.renewable_available_MWh)
+    assert heating.iloc[0].start==baseline.snapshots[5]
+    assert electric.iloc[0].start==baseline.snapshots[4]
     definition={'duration_hours':1,'fuel_link_disruptions':[{'fuel':'gas','reduction':1.,'locations':['DK0 0AC']}]}
     apply=Fields(input=Fields(net=str(tmp_path/'prepared.nc'),windows=str(tmp_path/'events.csv')),
                  output=Fields(net=str(tmp_path/'disrupted.nc'),report=str(tmp_path/'applied.csv')),
-                 params=Fields(definition=definition,variant='2025',weather_year='2013-2014'),
+                 params=Fields(definition=definition,campaign='fuel',variant='2025',weather_year='2013-2014'),
                  wildcards=Fields(case='gas_100pct_1h'))
+    timing_text=(tmp_path/'events.csv').read_text()
+    (tmp_path/'events.csv').write_text(timing_text.replace(TIMING_METRICS['fuel'],'combined_electricity_heat_minus_wind_solar_v1'))
+    with pytest.raises(ValueError,match='old timing metric'):
+        runpy.run_path(str(root/'scripts/apply_disruption.py'),run_name='__main__',init_globals={'snakemake':apply})
+    assert not (tmp_path/'disrupted.nc').exists()
+    (tmp_path/'events.csv').write_text(timing_text)
     runpy.run_path(str(root/'scripts/apply_disruption.py'),run_name='__main__',init_globals={'snakemake':apply})
     report=pd.read_csv(tmp_path/'applied.csv')
     assert set(report.asset)=={'CCGT','boiler'}
     disrupted=solve_case('gas_100pct_1h',tmp_path/'disrupted.nc')
-    selected=windows.iloc[0]
+    selected=heating.iloc[0]
     base_metrics=metrics(baseline,'DK0 0AC',selected.start,selected.end)
     result=metrics(disrupted,'DK0 0AC',selected.start,selected.end)
     assert base_metrics['ens_power_MWh']==0
-    assert result['ens_power_MWh']==6
-    assert result['ens_heat_MWh']==1
-    np.testing.assert_allclose(disrupted.links_t.p0.loc[disrupted.snapshots[4:5],'CCGT'],0,atol=1e-6)
+    assert result['ens_power_MWh']==2
+    assert result['ens_heat_MWh']==5
+    np.testing.assert_allclose(disrupted.links_t.p0.loc[disrupted.snapshots[5:6],'CCGT'],0,atol=1e-6)
     from scripts.plot_outage_dispatch import main, output_paths, DEFAULTS, zoom_windows
     assert list(zoom_windows(disrupted.snapshots,{'event':[selected.start,selected.end]}))==['event']
     plots=output_paths(tmp_path/'plots','DK2','gas_100pct_1h')
@@ -111,3 +130,41 @@ def test_prepare_baseline_timing_fuel_solve_and_plots(tmp_path, monkeypatch):
     outputs={f'2025_{kind}':str(tmp_path/f'heatmap_{kind}.png') for kind in ['power','heat']}
     plot_metrics(table,outputs)
     assert all(Path(path).is_file() for path in outputs.values())
+
+    # The interconnector path reads the other row for the same duration.
+    ic=Fields(input=apply.input,
+              output=Fields(net=str(tmp_path/'interconnector.nc'),report=str(tmp_path/'interconnector.csv')),
+              params=Fields(definition={'duration_hours':1,'interconnector_outages':[{'links':['cable']}]},
+                            campaign='interconnector',variant='2025',weather_year='2013-2014'),
+              wildcards=Fields(case='se_1h'))
+    runpy.run_path(str(root/'scripts/apply_disruption.py'),run_name='__main__',init_globals={'snakemake':ic})
+    ic_net=pypsa.Network(tmp_path/'interconnector.nc')
+    assert pd.Timestamp(ic_net.meta['disruption_event']['start'])==baseline.snapshots[4]
+    assert ic_net.links_t.p_max_pu.at[baseline.snapshots[4],'cable']==0
+    assert disrupted.meta['disruption_event']['campaign']=='fuel'
+    assert pd.Timestamp(disrupted.meta['disruption_event']['start'])==baseline.snapshots[5]
+
+    # Summary evaluation also selects the fuel window, and rejects stale solved dates.
+    import shutil
+    from scripts.summarise_disruptions import campaign_metrics
+    study=tmp_path/'study'
+    base_dir=study/'base_cases/2025/2013-2014'
+    case_dir=study/'fuel/2025/2013-2014/gas_100pct_1h'
+    (base_dir/'base_weather').mkdir(parents=True)
+    case_dir.mkdir(parents=True)
+    for name in ['network_solved.nc','dispatch_summary.csv']:
+        shutil.copy2(tmp_path/'base_weather'/name,base_dir/'base_weather'/name)
+        shutil.copy2(tmp_path/'gas_100pct_1h'/name,case_dir/name)
+    current_windows=windows.loc[windows.duration_hours.eq(1)].copy()
+    current_windows.to_csv(base_dir/'event_windows.csv',index=False)
+    summary_settings={'output_root':str(study),'campaign':'fuel','region':'DK0 0AC',
+                      'variants':{'2025':{}},'weather_years':{'2013-2014':{}},
+                      'fuels':['gas'],'reductions':[1.0],'durations_hours':[1]}
+    table=campaign_metrics(summary_settings)
+    assert pd.Timestamp(table.loc[table.period.eq('event'),'start'].iloc[0])==baseline.snapshots[5]
+    mask=current_windows.campaign.eq('fuel')
+    current_windows.loc[mask,'start']=baseline.snapshots[4]
+    current_windows.loc[mask,'end']=baseline.snapshots[5]
+    current_windows.to_csv(base_dir/'event_windows.csv',index=False)
+    with pytest.raises(ValueError,match='obsolete/different event timing'):
+        campaign_metrics(summary_settings)

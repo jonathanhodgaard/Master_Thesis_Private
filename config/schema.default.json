@@ -2239,6 +2239,18 @@
             }
           }
         },
+        "prepared_powerplants": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional prepared powerplant CSV replacing the retrieved database as build_powerplants input. Null preserves the standard retrieval workflow."
+        },
         "powerplants_filter": {
           "anyOf": [
             {
@@ -8737,6 +8749,18 @@
               "type": "array"
             }
           }
+        },
+        "prepared_powerplants": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional prepared powerplant CSV replacing the retrieved database as build_powerplants input. Null preserves the standard retrieval workflow."
         },
         "powerplants_filter": {
           "anyOf": [

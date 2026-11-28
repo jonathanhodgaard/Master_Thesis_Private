@@ -1,6 +1,7 @@
 from pathlib import Path
 import pytest
 
+from scripts.analyse_disruption_windows import TIMING_METRICS
 from scripts.disruption_scenarios import select_disruption
 from scripts.run_disruption_campaign import VARIANTS, YEARS, configfiles, load_config, campaign_tasks, check_inputs, task_targets
 
@@ -92,10 +93,16 @@ def test_stale_baseline_and_changed_policy_are_rejected(tmp_path):
     (result / 'network_solved.nc').write_text('fixture')
     timing = directory / 'event_windows.csv'
     with timing.open('w', newline='') as stream:
-        writer = csv.DictWriter(stream, fieldnames=['variant','weather_year','duration_hours'])
+        writer = csv.DictWriter(stream, fieldnames=['variant','weather_year','duration_hours','timing_metric','campaign'])
         writer.writeheader()
-        writer.writerows({'variant':'2025','weather_year':'2013-2014','duration_hours':h} for h in settings['durations_hours'])
+        writer.writerows({'variant':'2025','weather_year':'2013-2014','duration_hours':h,
+                          'timing_metric': TIMING_METRICS['fuel'], 'campaign':'fuel'} for h in settings['durations_hours'])
     check_inputs([task])
+    current_timing = timing.read_text()
+    timing.write_text(current_timing.replace(TIMING_METRICS['fuel'], 'combined_electricity_heat_minus_wind_solar_v1'))
+    with pytest.raises(ValueError, match='timing metric'):
+        check_inputs([task])
+    timing.write_text(current_timing)
     settings['load_shedding']['elec_cost'] += 1
     with pytest.raises(ValueError, match='settings changed'):
         check_inputs([task])
@@ -103,3 +110,21 @@ def test_stale_baseline_and_changed_policy_are_rejected(tmp_path):
     reference.write_text('changed input')
     with pytest.raises(ValueError, match='inputs/code changed'):
         check_inputs([task])
+
+
+@pytest.mark.parametrize('campaign',['interconnector','fuel'])
+def test_task_plans_select_their_own_window(tmp_path,campaign):
+    import pandas as pd
+    from scripts.run_disruption_campaign import plan_rows
+
+    task=campaign_tasks(load_config(configfiles('2025',campaign)),['2013-2014'])[0]
+    task['settings']['baseline_directory']=str(tmp_path)
+    rows=[]
+    for family,start in [('interconnector','2013-07-01 10:00'),('fuel','2014-01-01 10:00')]:
+        rows.append({'campaign':family,'timing_metric':TIMING_METRICS[family],
+                     'duration_hours':1,'start':start,'end':str(pd.Timestamp(start)+pd.Timedelta(hours=1))})
+    pd.DataFrame(rows).to_csv(tmp_path/'event_windows.csv',index=False)
+    row=list(plan_rows([task]))[0]
+    assert row['campaign']==campaign
+    assert row['timing_metric']==TIMING_METRICS[campaign]
+    assert row['start']==rows[0 if campaign=='interconnector' else 1]['start']

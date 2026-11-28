@@ -1,0 +1,39 @@
+{
+  "historical_file": "data/existing_infrastructure/archive/powerplants_pre_migration.csv",
+  "prepared_file": "data/existing_infrastructure/powerplants.csv",
+  "matches_current_companion_prepared_csv": true,
+  "rows": {
+    "historical": 201204,
+    "migrated": 163099
+  },
+  "danish_rows": {
+    "historical": 43984,
+    "migrated": 5879
+  },
+  "danish_MW": {
+    "historical": 12617.80519,
+    "migrated": 11419.133409999999
+  },
+  "danish_MW_by_fuel": {
+    "historical": {
+      "Biogas": 0.74,
+      "Hydro": 6.939,
+      "Natural Gas": 0.64,
+      "Oil": 642.0880000000001,
+      "Solar": 4467.47685,
+      "Wind": 7499.92134
+    },
+    "migrated": {
+      "Biogas": 0.74,
+      "Hydro": 6.939,
+      "Natural Gas": 0.64,
+      "Oil": 642.0880000000001,
+      "Solar": 3268.80507,
+      "Wind": 7499.92134
+    }
+  },
+  "other_three_capacity_tables": "Same numerical contents as existing private inputs after sorting geographical node aliases",
+  "results_rebuilt": false,
+  "historical_sha256": "842f95fe1bafbc71339c2a09df86da821c283d7179982b828470bd64f0cf5583",
+  "prepared_sha256": "3f83a84db9ea82088fbd6ba30f7a6cd308c55a17884bfd0055d1dc7bb60db581"
+}

@@ -1,0 +1,31 @@
+{
+  "origin": "master_thesis/data; copied without altering source bytes",
+  "ppm_version": "Unverified original PPM snapshot; do not infer version 0.8.1 from the old destination folder",
+  "files": {
+    "ENS_power_plant_register.csv": {
+      "bytes": 580624,
+      "sha256": "2c4aaa137f82259ecbd0b5639c503ba3db03f865b54cfbd038645a4b95546786"
+    },
+    "ENS_wind_&_solar_register.csv": {
+      "bytes": 26097347,
+      "sha256": "f4f479fa3a3801924071a354bd180703bca2148fedb1e71657a83120a0f97ce7"
+    },
+    "powerplants_PPM.csv": {
+      "bytes": 21894780,
+      "sha256": "0bb395b298bdcbcb29526df20f2a97f3c3dde0768af6f754ff66ed26ad8ed703"
+    },
+    "JRC-IDEES-2023_Residential_DK.xlsx": {
+      "bytes": 2835562,
+      "sha256": "a45f3b3980de4d8b7af9d950f028dbb723df4df118688e7841a191ea89b461c2"
+    },
+    "postcode_coordinates.csv": {
+      "bytes": 27614,
+      "sha256": "81ed1e849db054fc96a3fbe76e0284b86920de7b4046b9f488e2914f8b3200d3"
+    }
+  },
+  "source_script_sha256": {
+    "existing_power_capacities.py": "0e7d2786c0a5f57ac9bfdc111762bb7864f5b8af8db3cfe5f0990dbaa99f70e9",
+    "existing_chp_heat_capacities.py": "15f2716c42381df4f7d3ae2490ae69023fda9100fc07269e695a67e88ff32d5a",
+    "existing_rural_decentral_heat.py": "4ed1fddb1c62cbc3980fce3b7e34a4e280770e3a1d5e6117e781faac0364daeb"
+  }
+}

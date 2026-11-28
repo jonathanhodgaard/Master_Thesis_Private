@@ -109,6 +109,9 @@ disruption:
   campaign: baseline
   output_root: results/disruption_campaign_v2
   region: DK0 0AC
+  # Timing: interconnectors use total electricity - available wind/solar;
+  # fuels use useful heat demand - available wind/solar (heating-stress proxy).
+  # Each criterion selects its own windows; 720/2160 hours represent 30/90 days.
   durations_hours:
   - 1
   - 24

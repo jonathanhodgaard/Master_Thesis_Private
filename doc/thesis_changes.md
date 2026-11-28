@@ -1,3 +1,6 @@
+> Capacity preparation now lives in this repository. Use [the ordered preparation guide](preparation_workflow.md)
+> for current scripts, source snapshots and input paths; companion-script descriptions below are historical.
+
 > Disruption campaign update: use [the current campaign guide](disruption_campaign.md).
 > The disruption file lists and commands below describe historical experiments;
 > retired files/configurations remain in Git history. Existing results are unchanged.
